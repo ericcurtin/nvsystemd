@@ -215,6 +215,25 @@ def u10_persistenced_unit(variant, v):
 
 
 @test
+def u11_smi_units(variant, v):
+    """nvidia-smi-{lmc,lgc,pl,srs}.service: argv, driver/persistenced first, srs last, only in gpu mode."""
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.smi.lmc=5001 nvrc.smi.lgc=1500 nvrc.smi.pl=300 nvrc.smi.srs=1")
+    booted_agent(rep)
+    assert argv_of(rep, "nvidia-smi:lmc") == "-lmc 5001"
+    assert argv_of(rep, "nvidia-smi:lgc") == "-lgc 1500"
+    assert argv_of(rep, "nvidia-smi:pl") == "-pl 300"
+    assert argv_of(rep, "nvidia-smi:srs") == "conf-compute -srs 1"
+    for smi in ("lmc", "lgc", "pl"):
+        assert_before(rep, ("modprobe", "done"), ("nvidia-smi:" + smi, "start"))
+        assert_before(rep, ("nvidia-persistenced", "ready"), ("nvidia-smi:" + smi, "start"))
+        assert_before(rep, ("nvidia-smi:" + smi, "done"), ("nvidia-smi:srs", "start"))
+    assert_before(rep, ("nvidia-smi:srs", "done"), ("kata-agent", "start"))
+    rep = L.boot(variant, append=ECHO + " nvrc.smi.lgc=1500")  # cpu mode ignores the parameter
+    booted_agent(rep)
+    assert not rep.events("nvidia-smi:lgc")
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: smi.rs nvidia_smi_srs (conf-compute -srs: GPU ready state), run in mode_gpu only when nvrc.smi.srs is set on the kernel command
+# line. Value comes from /run/nvsd/smi.srs (written by nvsd-cmdline.service, absent = unit
+# skipped). A non-zero exit powers the VM off (NVRC foreground() panics).
+# NVRC sets the ready state last, after every other nvidia-smi call, hostengine, the exporter
+# and CDI generation: ordered after all of them, so the GPU only becomes Ready once configured.
+[Unit]
+Description=nvidia-smi conf-compute -srs: GPU ready state
+DefaultDependencies=no
+After=modprobe@nvidia.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service
+ConditionPathExists=/run/nvsd/mode.gpu
+ConditionPathExists=/run/nvsd/smi.srs
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+EnvironmentFile=/run/nvsd/smi.srs
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/bin:/bin
+ExecStart=nvidia-smi conf-compute -srs ${NVSD_VALUE}
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

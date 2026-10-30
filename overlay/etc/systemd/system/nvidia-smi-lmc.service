@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: smi.rs nvidia_smi_lmc (-lmc: lock memory clocks (MHz)), run in mode_gpu only when nvrc.smi.lmc is set on the kernel command
+# line. Value comes from /run/nvsd/smi.lmc (written by nvsd-cmdline.service, absent = unit
+# skipped). A non-zero exit powers the VM off (NVRC foreground() panics).
+# Ordered after the driver modules and the persistence daemon. NVRC runs lmc, lgc and pl one
+# after the other; they set independent GPU properties, so here they run concurrently.
+[Unit]
+Description=nvidia-smi -lmc: lock memory clocks (MHz)
+DefaultDependencies=no
+After=modprobe@nvidia.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service
+ConditionPathExists=/run/nvsd/mode.gpu
+ConditionPathExists=/run/nvsd/smi.lmc
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+EnvironmentFile=/run/nvsd/smi.lmc
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/bin:/bin
+ExecStart=nvidia-smi -lmc ${NVSD_VALUE}
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit
