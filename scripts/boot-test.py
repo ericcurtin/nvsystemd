@@ -165,6 +165,19 @@ def u07_mode_targets_selected_from_topology(variant, v):
 
 
 @test
+def u08_modprobe_units(variant, v):
+    """modprobe@.service: argv and order of the module loads per mode (NVRC modprobe.rs)."""
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO)
+    booted_agent(rep)
+    mods = [e["detail"].split(" ", 1)[1] for e in rep.events("modprobe", "start")]
+    assert mods == ["argv=nvidia NVreg_NvLinkDisable=1", "argv=nvidia-uvm"], mods
+    rep = L.boot(variant, pci=["nvl4"], append=ECHO)
+    booted_agent(rep)
+    mods = [e["detail"].split(" ", 1)[1] for e in rep.events("modprobe", "start")]
+    assert mods == ["argv=nvidia"], mods
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

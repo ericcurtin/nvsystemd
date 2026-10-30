@@ -1,0 +1,23 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: modprobe.rs load(): one forked /sbin/modprobe per module, output to /dev/kmsg only for
+# debug logging, any failure panics. One instance per module; the per-module facts live in
+# drop-ins (conditions, ordering) and in /run/nvsd/modprobe-%i.env (NVSD_PARAMS=
+# NVreg_NvLinkDisable=1 for nvidia on a single-GPU VM, written by nvsd-mode.service).
+# NVRC says module loads must be serialised ("parallel modprobe calls can race"), so the
+# drop-ins chain nvidia -> nvidia-uvm -> ib_umad -> mlx5_ib; nothing else in the boot is
+# serialised against them except what needs the driver.
+[Unit]
+Description=Load kernel module %i
+DefaultDependencies=no
+After=nvsd-mode.service nvsd-cmdline.service
+Requires=nvsd-mode.service
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=-/run/nvsd/modprobe-%i.env
+ExecStart=/usr/sbin/modprobe $NVSD_DIRNAME %i $NVSD_PARAMS
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

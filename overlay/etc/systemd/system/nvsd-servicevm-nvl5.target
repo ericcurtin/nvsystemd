@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # NVRC main.rs: the "servicevm-nvl5" arm of the mode match. Reached only when nvsd-mode.service
 # detected that mode (marker /run/nvsd/mode.servicevm-nvl5); units of the mode are pulled in by
-# Wants= below and each carries the same condition, because systemd adds Wants= dependencies
+# Requires= below and each carries the same condition, because systemd adds Requires=/Wants= dependencies
 # to the transaction before conditions are evaluated.
 [Unit]
 Description=NVRC mode: servicevm-nvl5
 DefaultDependencies=no
-Requires=nvsd-mode.service
-After=nvsd-mode.service
+Requires=nvsd-mode.service modprobe@ib_umad.service modprobe@mlx5_ib.service
+After=nvsd-mode.service modprobe@ib_umad.service modprobe@mlx5_ib.service
 ConditionPathExists=/run/nvsd/mode.servicevm-nvl5
