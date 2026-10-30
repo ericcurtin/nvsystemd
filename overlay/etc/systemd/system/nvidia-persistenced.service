@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: daemon.rs nvidia_persistenced() / spawn_persistenced(): create /var/run/nvidia-persistenced,
+# start `nvidia-persistenced --verbose [--uvm-persistence-mode]` (UVM persistence on unless
+# nvrc.uvm.persistence.mode is false), then block until the daemon logs
+# "Local RPC services initialized" to /dev/log (600 s timeout).
+#  - the daemon forks, so Type=forking; the unit is "started" only after ExecStartPost has seen
+#    the marker, so everything ordered After= it starts with a ready persistence daemon.
+#  - /var/run/nvidia-persistenced is RuntimeDirectory= (/var/run is a symlink to /run).
+#  - binaries are found via ExecSearchPath=: the gpu extension when mounted, else the rootfs
+#    (NVRC gpu_extension::path()).
+#  - any exit of the daemon later in the boot fails the unit -> power off (NVRC only notices
+#    in its point-in-time health_checks()).
+[Unit]
+Description=nvidia-persistenced (GPU state persistence daemon)
+DefaultDependencies=no
+Requires=nvsd-syslog.socket
+After=nvsd-syslog.socket nvsd-cmdline.service nvsd-mode.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nv-fabricmanager.service
+ConditionPathExists=/run/nvsd/mode.gpu
+FailureAction=poweroff-immediate
+
+[Service]
+Type=forking
+GuessMainPID=yes
+RuntimeDirectory=nvidia-persistenced
+RuntimeDirectoryPreserve=yes
+EnvironmentFile=/run/nvsd/persistenced.env
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/bin:/bin
+ExecStart=nvidia-persistenced $NVSD_ARGS
+ExecStartPost=/usr/lib/nvsd/nvsd-helper wait-marker "Local RPC services initialized" 600
+TimeoutStartSec=600
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

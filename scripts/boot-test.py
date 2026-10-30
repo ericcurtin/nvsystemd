@@ -195,6 +195,26 @@ def u09_uvm_tools_node_is_created(variant, v):
 
 
 @test
+def u10_persistenced_unit(variant, v):
+    """nvidia-persistenced.service: argv, uvm persistence switch, and kata-agent waits for the syslog readiness
+    marker (the daemon needs 150 ms to become ready: 'ready' must precede the agent)."""
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvstub.latency.nvidia-persistenced=150", fixture_name="pers")
+    booted_agent(rep)
+    assert argv_of(rep, "nvidia-persistenced") == "--verbose --uvm-persistence-mode"
+    assert_before(rep, ("modprobe", "done"), ("nvidia-persistenced", "start"))
+    assert_before(rep, ("nvidia-persistenced", "ready"), ("kata-agent", "start"))
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.uvm.persistence.mode=off")
+    booted_agent(rep)
+    assert argv_of(rep, "nvidia-persistenced") == "--verbose"
+    if variant == "nvrc":
+        # deliberate difference: NVRC only waits for the syslog marker, which a dead daemon never
+        # sends, so it hangs until its 600 s timeout; systemd sees the daemon exit and powers off at once
+        return
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvstub.fail.nvidia-persistenced=2")
+    vm_off_without_agent(rep)
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)
