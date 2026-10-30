@@ -119,7 +119,9 @@ def t04_socket_buffer_sysctls_and_log(variant, v):
     booted_agent(rep)
     for k in ("rmem_default", "rmem_max", "wmem_default", "wmem_max"):
         assert rep.facts[k] == "16777216", rep.facts
-    assert rep.facts["printk_devkmsg"] == "ratelimit", rep.facts
+    # deliberate difference: systemd itself switches printk_devkmsg to "on" at startup (no rate limit),
+    # NVRC leaves the kernel default ("ratelimit") unless nvrc.log is given
+    assert rep.facts["printk_devkmsg"] == ("ratelimit" if variant == "nvrc" else "on"), rep.facts
     rep = L.boot(variant, append="nvrc.log=info")
     booted_agent(rep)
     assert rep.facts["printk_devkmsg"] == "on", rep.facts
