@@ -45,6 +45,29 @@ for sc in (0.25, 0.5, 2):
                                    conf=profile_text(sc))
 
 
+def cpu_busy(sample=0.1):
+    """Host CPUs busy (sum over all CPUs, in CPU units) during a short sample, from /proc/stat."""
+    def read():
+        with open("/proc/stat") as f:
+            v = [int(x) for x in f.readline().split()[1:]]
+        return sum(v) - v[3] - v[4], sum(v)  # busy (not idle/iowait), total
+    b0, t0 = read()
+    time.sleep(sample)
+    b1, t1 = read()
+    return (b1 - b0) / max(1, t1 - t0) * os.cpu_count()
+
+
+def wait_quiet(limit, max_wait=90):
+    """The host is shared with other jobs. Before each round wait (bounded) until the others use fewer than
+    `limit` CPUs; returns the last measured busy value so it is stored with the run."""
+    t0 = time.monotonic()
+    busy = cpu_busy()
+    while busy > limit and time.monotonic() - t0 < max_wait:
+        time.sleep(1.0)
+        busy = cpu_busy()
+    return busy
+
+
 def metrics(rep, image_bytes):
     """One run's numbers. Memory/CPU come from the stub's report at the moment kata-agent starts."""
     k = rep.kata
@@ -94,6 +117,7 @@ def main():
     ap.add_argument("--append", default="", help="extra kernel command line items given to BOTH variants")
     ap.add_argument("--warmup", type=int, default=2)
     ap.add_argument("--seed", type=int, default=1)
+    ap.add_argument("--busy-limit", type=float, default=2.5, help="wait (up to 90 s per round) while other host load exceeds this many CPUs")
     a = ap.parse_args()
     # "name" or "alias=spec" (spec like nvsd@/dir for an experimental overlay directory, or nvsd-probe)
     specs = {}
@@ -116,13 +140,14 @@ def main():
             order = list(variants)
             if r % 2:  # interleave, alternating who goes first
                 order.reverse()
+            busy = wait_quiet(a.busy_limit)
             for v in order:
                 rep = L.boot(specs[v], pci=sc["pci"], append=(sc["append"] + " " + a.append).strip(), image=images[v], timeout=60)
                 m = metrics(rep, sizes[v])
                 if r < 0:
                     continue  # warm-up: page cache, KVM, qemu binary
                 rec = {"label": a.label, "scenario": name, "variant": v, "round": r, "ok": m is not None,
-                       "ts": time.time()}
+                       "ts": time.time(), "host_busy_cpus": round(busy, 2), "loadavg1": os.getloadavg()[0]}
                 if m:
                     rec.update(m)
                 else:

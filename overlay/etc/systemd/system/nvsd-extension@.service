@@ -12,10 +12,14 @@ ConditionPathExists=/run/nvsd/ext-%i.env
 OnFailure=nvsd-poweroff.service
 
 [Service]
+# no per-template slice (systemd would create system-<template>.slice: one more unit to build at boot)
+Slice=system.slice
 Type=oneshot
 RemainAfterExit=yes
 EnvironmentFile=/run/nvsd/ext-%i.env
 ExecStart=/usr/sbin/veritysetup $NVSD_VERITY_ARGS
 StandardInput=null
-StandardOutput=file:/run/nvsd/out
-StandardError=inherit
+# runs before nvsd-init.service has created /run/nvsd/out: output is always discarded (NVRC would
+# route it to /dev/kmsg with nvrc.log=debug)
+StandardOutput=null
+StandardError=null

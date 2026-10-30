@@ -5,7 +5,7 @@
 [Unit]
 Description=Create /dev/nvidia-uvm-tools (nvrc.uvm.tools)
 DefaultDependencies=no
-After=modprobe@nvidia-uvm.service nvsd-cmdline.service nvsd-mode.service
+After=modprobe@nvidia-uvm.service nvsd-init.service
 ConditionPathExists=/run/nvsd/load.nvidia-uvm
 ConditionPathExists=/run/nvsd/uvm-tools
 OnFailure=nvsd-poweroff.service

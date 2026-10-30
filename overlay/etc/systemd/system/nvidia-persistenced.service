@@ -14,7 +14,7 @@
 Description=nvidia-persistenced (GPU state persistence daemon)
 DefaultDependencies=no
 Requires=nvsd-syslog.socket
-After=nvsd-syslog.socket nvsd-cmdline.service nvsd-mode.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nv-fabricmanager.service
+After=nvsd-syslog.socket nvsd-init.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nv-fabricmanager.service
 ConditionPathExists=/run/nvsd/mode.gpu
 OnFailure=nvsd-poweroff.service
 

@@ -7,8 +7,8 @@
 Description=Drain /dev/log into /run/syslog.log
 DefaultDependencies=no
 Requires=nvsd-syslog.socket
-After=nvsd-syslog.socket nvsd-mode.service
-# Started eagerly by nvsd-mode.service in every mode but cpu, so the sink is already running when
+After=nvsd-syslog.socket nvsd-init.service
+# Started eagerly by nvsd-init.service in every mode but cpu, so the sink is already running when
 # nvidia-persistenced logs its readiness marker (socket activation on the critical path costs a
 # process start). In cpu mode nothing logs and the unit is skipped; the socket still owns /dev/log.
 ConditionPathExists=!/run/nvsd/mode.cpu

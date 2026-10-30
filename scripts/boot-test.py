@@ -151,7 +151,7 @@ def t06_dev_log_socket_exists(variant, v):
 
 @test
 def u07_mode_targets_selected_from_topology(variant, v):
-    """nvsd-mode.service + mode targets (nvsystemd only): exactly the target of the detected mode is reached."""
+    """nvsd-init.service + mode targets (nvsystemd only): exactly the target of the detected mode is reached."""
     if variant != "nvsd":
         return "skip: nvsd only"
     want = {"cpu": ("none", "nvsd-cpu.target"), "gpu": ("gpu1", "nvsd-gpu.target"),
@@ -303,7 +303,7 @@ def u14_gpu_extension_paths(variant, v):
     if variant != "nvsd":
         return "skip: nvsd only"
     unit = ("[Unit]\nDescription=test only: fake gpu extension\nDefaultDependencies=no\n"
-            "Before=nvsd-extensions.target nvsd-ldcache.service usr-lib-firmware-nvidia.mount nvsd-mode.service\n"
+            "Before=nvsd-extensions.target nvsd-ldcache.service usr-lib-firmware-nvidia.mount nvsd-init.service\n"
             "[Service]\nType=oneshot\nExecStart=/usr/bin/nvstub mkext\n")
     extra = {"/etc/systemd/system/test-fake-gpu-ext.service": unit,
              "/etc/systemd/system/nvsd-extensions.target.d/test.conf": "[Unit]\nWants=test-fake-gpu-ext.service\n"}

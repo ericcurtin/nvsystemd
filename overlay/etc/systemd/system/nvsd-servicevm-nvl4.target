@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# NVRC main.rs: the "servicevm-nvl4" arm of the mode match. Reached only when nvsd-mode.service
+# NVRC main.rs: the "servicevm-nvl4" arm of the mode match. Reached only when nvsd-init.service
 # detected that mode (marker /run/nvsd/mode.servicevm-nvl4); units of the mode are pulled in by
 # Requires= below and each carries the same condition, because systemd adds Requires=/Wants= dependencies
 # to the transaction before conditions are evaluated.
 [Unit]
 Description=NVRC mode: servicevm-nvl4
 DefaultDependencies=no
-Requires=nvsd-mode.service modprobe@nvidia.service nv-fabricmanager.service
-After=nvsd-mode.service modprobe@nvidia.service nv-fabricmanager.service
+Requires=nvsd-init.service modprobe@nvidia.service nv-fabricmanager.service
+After=nvsd-init.service modprobe@nvidia.service nv-fabricmanager.service
 ConditionPathExists=/run/nvsd/mode.servicevm-nvl4

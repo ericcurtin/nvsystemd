@@ -5,6 +5,6 @@
 [Unit]
 Description=nvsystemd base (mounts, kernel parameters)
 DefaultDependencies=no
-Requires=tmp.mount sys-kernel-config.mount nvsd-syslog.socket nvsd-cmdline.service
+Requires=nvsd-syslog.socket nvsd-init.service
 Wants=nvsd-hash.service
-After=tmp.mount sys-kernel-config.mount nvsd-cmdline.service
+After=nvsd-init.service

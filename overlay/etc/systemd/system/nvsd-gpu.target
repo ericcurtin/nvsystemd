@@ -1,11 +1,11 @@
 # SPDX-License-Identifier: Apache-2.0
-# NVRC main.rs: the "gpu" arm of the mode match. Reached only when nvsd-mode.service
+# NVRC main.rs: the "gpu" arm of the mode match. Reached only when nvsd-init.service
 # detected that mode (marker /run/nvsd/mode.gpu); units of the mode are pulled in by
 # Requires= below and each carries the same condition, because systemd adds Requires=/Wants= dependencies
 # to the transaction before conditions are evaluated.
 [Unit]
 Description=NVRC mode: gpu
 DefaultDependencies=no
-Requires=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
-After=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
+Requires=nvsd-init.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
+After=nvsd-init.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
 ConditionPathExists=/run/nvsd/mode.gpu

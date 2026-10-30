@@ -734,12 +734,47 @@ static int cmd_poweroff(void) {
 	return die("poweroff", "reboot(POWER_OFF) returned");
 }
 
+/* ------------------------------------------------------------------ init
+ * The NVRC prologue in one process: mount::setup() extras, kmsg/kernel parameters, mode detection.
+ * (nvsd-init.service; see its comment for why this is one unit.) */
+#define MS_NOSUID_ 2
+#define MS_NODEV_ 4
+#define MS_NOEXEC_ 8
+#define MS_RELATIME_ (1ul << 21)
+static int cmd_init(void) {
+	/* mount.rs setup(): /tmp tmpfs MS_NOSUID|MS_NODEV|MS_RELATIME */
+	if (sys_mount("tmpfs", "/tmp", "tmpfs", MS_NOSUID_ | MS_NODEV_ | MS_RELATIME_, NULL) < 0) return die("init", "mount tmpfs on /tmp failed");
+	/* mount_optional(configfs): only if the kernel has it and the target exists */
+	static char fs[4096];
+	read_file("/proc/filesystems", fs, sizeof(fs));
+	long cfd = sys_open("/sys/kernel/config", O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+	if (cfd >= 0) {
+		sys_close((int)cfd);
+		const char *p = fs;
+		int have = 0;
+		while (*p) {
+			const char *e = p;
+			while (*e && *e != '\n') e++;
+			const char *w = e;
+			while (w > p && w[-1] != ' ' && w[-1] != '\t') w--;
+			if ((usize)(e - w) == 8 && !memcmp(w, "configfs", 8)) have = 1;
+			p = *e ? e + 1 : e;
+		}
+		if (have && sys_mount("configfs", "/sys/kernel/config", "configfs", MS_NOSUID_ | MS_NODEV_ | MS_NOEXEC_ | MS_RELATIME_, NULL) < 0)
+			return die("init", "mount configfs failed");
+	}
+	int r = cmd_cmdline();
+	if (r) return r;
+	return cmd_detect();
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
 	const char *sub = argv[1];
 	if (seq(sub, "cmdline")) return cmd_cmdline();
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
+	if (seq(sub, "init")) return cmd_init();
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
 	if (seq(sub, "poweroff")) return cmd_poweroff();

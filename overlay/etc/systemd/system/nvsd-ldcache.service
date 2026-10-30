@@ -15,5 +15,7 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/sbin/ldconfig -X -f /usr/lib/nvsd/ld.so.conf -C /run/ld.so.cache
 StandardInput=null
-StandardOutput=file:/run/nvsd/out
-StandardError=inherit
+# runs before nvsd-init.service has created /run/nvsd/out: output is always discarded (NVRC would
+# route it to /dev/kmsg with nvrc.log=debug)
+StandardOutput=null
+StandardError=null

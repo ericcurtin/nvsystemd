@@ -2,12 +2,12 @@
 # NVRC: daemon.rs dcgm_exporter(): `dcgm-exporter -k -f <collectors csv>` (Kubernetes mode, no
 # standalone HTTP server), started in mode_gpu only when nvrc.dcgm is true, left running next to
 # kata-agent. The collectors file follows the gpu extension: ${NVSD_GPU_ROOT} is its mount point
-# (written to /run/nvsd/gpu-ext.env by nvsd-mode.service) and empty without the extension.
+# (written to /run/nvsd/gpu-ext.env by nvsd-init.service) and empty without the extension.
 # Foreground daemon: Type=exec; an exit at any time powers the VM off.
 [Unit]
 Description=dcgm-exporter (Prometheus GPU metrics)
 DefaultDependencies=no
-After=nv-hostengine.service nvsd-cmdline.service nvsd-mode.service
+After=nv-hostengine.service nvsd-init.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/dcgm
 OnFailure=nvsd-poweroff.service

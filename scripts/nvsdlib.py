@@ -124,7 +124,7 @@ class Report:
     @staticmethod
     def _add(dst, ln):
         parts = ln.split(" ", 4)
-        if len(parts) >= 4 and parts[0].isdigit():
+        if len(parts) >= 4 and parts[0].isdigit() and parts[1].isdigit():  # console lines can interleave
             dst.append({"t": int(parts[0]), "pid": int(parts[1]), "name": parts[2], "event": parts[3],
                         "detail": parts[4] if len(parts) > 4 else ""})
 

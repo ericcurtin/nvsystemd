@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC main(): the prologue after the API mounts, as one process start:
+#   mount::setup()            /tmp tmpfs (nosuid,nodev,relatime) and configfs on /sys/kernel/config (optional)
+#   kmsg::kernlog_setup()     the four net.core socket buffers = 16 MiB
+#   process_kernel_params()   nvrc.* -> /run/nvsd/* (smi.*, dcgm, uvm-tools, persistenced.env, out)
+#   mode::detect()            PCI topology -> /run/nvsd/mode.* and friends (an unmatched topology is fatal)
+# Helper subcommands "cmdline" and "detect" in one exec. They began as separate units
+# (nvsd-init.service, tmp.mount, sys-kernel-config.mount, nvsd-init.service, see git history); merged
+# because every unit costs PID 1 a fork of systemd-executor, which on a 2 vCPU guest is measured
+# (bench/results/tuning.md) at about 2 ms each, 4.8 ms for the two mount units alone.
+# Ordered after the extension mount (modprobes may be needed by it) and before every unit that reads
+# /run/nvsd. In cpu mode the helper also applies the lockdown (see nvsd-lockdown.service).
+[Unit]
+Description=NVRC prologue: mounts, kernel parameters, mode detection
+DefaultDependencies=no
+Requires=nvsd-extensions.target
+After=nvsd-extensions.target
+Wants=nvsd-syslog.service
+OnFailure=nvsd-poweroff.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper init
+StandardInput=null
+StandardOutput=null
+StandardError=null

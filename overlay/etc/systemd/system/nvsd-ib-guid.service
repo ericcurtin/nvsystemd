@@ -5,7 +5,7 @@
 [Unit]
 Description=Detect the CX7 port GUID (NVL5)
 DefaultDependencies=no
-After=modprobe@ib_umad.service modprobe@mlx5_ib.service nvsd-mode.service
+After=modprobe@ib_umad.service modprobe@mlx5_ib.service nvsd-init.service
 ConditionPathExists=/run/nvsd/nvl5
 OnFailure=nvsd-poweroff.service
 

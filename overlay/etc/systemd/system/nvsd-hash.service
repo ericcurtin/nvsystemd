@@ -6,7 +6,7 @@
 [Unit]
 Description=Log sha256 of the init binaries
 DefaultDependencies=no
-After=nvsd-cmdline.service
+After=nvsd-init.service
 ConditionKernelCommandLine=|nvrc.log=info
 ConditionKernelCommandLine=|nvrc.log=debug
 ConditionKernelCommandLine=|nvrc.log=trace

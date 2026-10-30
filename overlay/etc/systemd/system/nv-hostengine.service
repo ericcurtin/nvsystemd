@@ -8,7 +8,7 @@
 [Unit]
 Description=nv-hostengine (DCGM backend)
 DefaultDependencies=no
-After=modprobe@nvidia-uvm.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service
+After=modprobe@nvidia-uvm.service nvidia-persistenced.service nvsd-init.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/dcgm
 OnFailure=nvsd-poweroff.service

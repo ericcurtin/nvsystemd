@@ -3,7 +3,7 @@
 # /run, set FABRIC_MODE (0 = gpu mode, 1 = service VM) and PARTITION_RAIL_POLICY (greedy NVL4,
 # symmetric NVL5), chmod 0400, start `nv-fabricmanager -c /run/fabricmanager.cfg [-g <port GUID>]`
 # and block until the daemon logs "FM starting NvLink Inband" (120 s timeout).
-#  - mode/policy come from /run/nvsd/fm.env (nvsd-mode.service); the config edit is the helper's
+#  - mode/policy come from /run/nvsd/fm.env (nvsd-init.service); the config edit is the helper's
 #    fm-config (systemd cannot edit a KEY=VALUE file).
 #  - runs in both fabric modes: gpu mode with NVL4/NVL5 switches (FABRIC_MODE=0) and servicevm-nvl4/5
 #    (FABRIC_MODE=1); the unit is skipped when no NVSwitch topology was detected.
@@ -13,7 +13,7 @@
 Description=nv-fabricmanager (NVSwitch fabric manager)
 DefaultDependencies=no
 Requires=nvsd-syslog.socket
-After=nvsd-syslog.socket nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvsd-ib-guid.service nvlsm.service
+After=nvsd-syslog.socket nvsd-init.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvsd-ib-guid.service nvlsm.service
 ConditionPathExists=/run/nvsd/fm
 OnFailure=nvsd-poweroff.service
 
