@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: lockdown.rs disable_modules_loading(), called after every mode function and right
+# before kata-agent is forked: no kernel module can be loaded for the rest of the boot.
+# Ordered after all four mode targets (so after every modprobe of every mode); kata-agent
+# is ordered after this unit and Requires= it, so a failed lockdown never reaches the agent.
+[Unit]
+Description=Disable kernel module loading (lockdown)
+DefaultDependencies=no
+After=nvsd-cpu.target nvsd-gpu.target nvsd-servicevm-nvl4.target nvsd-servicevm-nvl5.target
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper lockdown
+StandardOutput=null
+StandardError=null

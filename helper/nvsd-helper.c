@@ -372,6 +372,18 @@ static int cmd_detect(void) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ lockdown
+ * NVRC lockdown.rs disable_modules_loading(): kernel.modules_disabled=1, one way. A missing
+ * sysctl (kernel without module support) is fine, any other error is fatal.
+ * systemd has no directive that writes a sysctl at a chosen point of the boot (systemd-sysctl
+ * would apply at its own fixed time and costs a second large binary). */
+static int cmd_lockdown(void) {
+	long r = write_file("/proc/sys/kernel/modules_disabled", "1\n", 2, 0, 0);
+	if (r == -ENOENT) return 0;
+	if (r < 0) return die("lockdown", "cannot disable module loading");
+	return 0;
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -379,6 +391,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "cmdline")) return cmd_cmdline();
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
+	if (seq(sub, "lockdown")) return cmd_lockdown();
 	if (seq(sub, "syslog")) return cmd_syslog();
 	if (seq(sub, "wait-marker")) return cmd_wait_marker(argc, argv);
 	return die("main", "unknown subcommand");
