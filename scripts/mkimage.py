@@ -182,8 +182,9 @@ def compress(raw, out, how):
     cmd = {"zstd": ["zstd", "-q", "-19", "-T0", "-f", "-o", out, raw],
            "zstd3": ["zstd", "-q", "-3", "-T0", "-f", "-o", out, raw],
            "gzip": ["sh", "-c", "gzip -9 -n < %s > %s" % (raw, out)],
-           "xz": ["xz", "-q", "--check=crc32", "-9", "-T1", "-c", raw]}[how]
-    if how == "xz":
+           "xz": ["xz", "-q", "--check=crc32", "-9", "-T1", "-c", raw],
+           "lz4": ["lz4", "-q", "-l", "-9", "-c", raw]}[how]  # -l: the legacy frame the kernel decompressor wants
+    if how in ("xz", "lz4"):
         with open(out, "wb") as f:
             subprocess.run(cmd, check=True, stdout=f)
     else:
@@ -194,7 +195,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", required=True, choices=["nvrc", "nvsd", "systemd-only"])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "zstd3", "gzip", "xz"])
+    ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "zstd3", "gzip", "xz", "lz4"])
     ap.add_argument("--nvrc-bin")
     ap.add_argument("--extra", action="append", default=[], metavar="DEST=SRCFILE",
                     help="test-only: add a file to the image (e.g. a systemd drop-in)")

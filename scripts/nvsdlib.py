@@ -28,7 +28,7 @@ def build_tools():
 
 
 def image_path(variant, fixture_name, compress):
-    return os.path.join(OUT, "images", "%s-%s-%s.cpio%s" % (variant, fixture_name, compress, {"none": "", "zstd": ".zst", "zstd3": ".zst", "gzip": ".gz", "xz": ".xz"}[compress]))
+    return os.path.join(OUT, "images", "%s-%s-%s.cpio%s" % (variant, fixture_name, compress, {"none": "", "zstd": ".zst", "zstd3": ".zst", "gzip": ".gz", "xz": ".xz", "lz4": ".lz4"}[compress]))
 
 
 def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False, extra=None):
