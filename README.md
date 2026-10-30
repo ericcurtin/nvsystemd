@@ -7,8 +7,8 @@ as unit files: one systemd unit per process NVRC forks or execs (`nvidia-persist
 `nv-hostengine`, `dcgm-exporter`, `nvidia-ctk cdi generate`, `nv-fabricmanager`, `nvlsm`, one `modprobe@.service`
 instance per module, `kata-agent`), targets for the modes (cpu, gpu, servicevm-nvl4, servicevm-nvl5), ordering and
 conditions instead of NVRC's straight-line `main()`, and `OnFailure=` to power the VM off the way NVRC's panic hook does.
-A tiny static helper (`nvsd-helper`) exists only where systemd cannot do the job; each subcommand is justified in
-`docs/MAPPING.md`.
+A tiny static helper (`nvsd-helper`) exists only where systemd cannot do the job (plus two mounts folded in for speed,
+see `docs/MAPPING.md`); each subcommand is justified there.
 
 **About the name.** The request called the thing being replaced "nvinit". No such NVIDIA project exists; the project
 that does this job is NVRC (NVIDIA Runtime Container init), which is what this repository mirrors. Where the request used

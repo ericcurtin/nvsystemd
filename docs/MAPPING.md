@@ -20,21 +20,21 @@ NVRC baseline and, where marked, only against nvsystemd. All of it runs on a SIM
 | `lockdown::set_panic_hook()` (kmsg line, `sync()`, power off on any panic) | `nvsd-poweroff.service` + helper `poweroff`; every unit has `OnFailure=nvsd-poweroff.service` | t30-t36, u10 |
 | `NVRC::default()` | none (state is the files under `/run/nvsd`) | |
 | `mount::setup()`: /proc /sys /run (nosuid,noexec,nodev,relatime; run mode=0755) | systemd's built-in early API mounts (no unit) | t01 |
-| `mount::setup()`: /tmp tmpfs (nosuid,nodev,relatime) | `tmp.mount` | t01 |
+| `mount::setup()`: /tmp tmpfs (nosuid,nodev,relatime) | `nvsd-init.service`, helper `init` (`mount(2)`). The first implementation was the native `tmp.mount`; each mount unit forks `systemd-executor` and `/usr/bin/mount`, measured at 4.8 ms for the two mount units on the zero-latency gpu scenario (`bench/results/tuning.md`), so they were folded into the init helper (git history has the units) | t01 |
 | `mount::setup()`: securityfs on /sys/kernel/security (optional) | systemd's built-in table (`/sys/kernel/security` is mounted when the kernel has it) | |
-| `mount::setup()`: configfs on /sys/kernel/config (optional) | `sys-kernel-config.mount` (`ConditionPathExists=/sys/kernel/config`) | t01 |
+| `mount::setup()`: configfs on /sys/kernel/config (optional: only if the kernel has it and the target exists) | `nvsd-init.service`, helper `init` (same reason as /tmp) | t01 |
 | `net::loopback_up()` | systemd brings `lo` up itself at startup (checked: `lo_flags` has IFF_UP) | t01 |
-| `kmsg::kernlog_setup()`: four `net.core` buffers = 16 MiB | `nvsd-cmdline.service`, helper `cmdline` (systemd has no sysctl-write directive at a chosen point; systemd-sysctl would be a second large binary) | t04 |
+| `kmsg::kernlog_setup()`: four `net.core` buffers = 16 MiB | `nvsd-init.service`, helper `cmdline` (systemd has no sysctl-write directive at a chosen point; systemd-sysctl would be a second large binary) | t04 |
 | `kmsg::kernlog_setup()`: kernlog logger | dropped: systemd logs to the kernel ring buffer by itself (`log_target` kmsg without journald) | |
 | `syslog::poll()` (bind `/dev/log`, drain to `/run/syslog.log`) | `nvsd-syslog.socket` (owns `/dev/log`) + `nvsd-syslog.service` (socket activated), helper `syslog` | t06 |
-| `process_kernel_params()` | `nvsd-cmdline.service`, helper `cmdline`: writes `/run/nvsd/*` files that unit conditions and `EnvironmentFile=` consume. systemd cannot split `nvrc.smi.lgc=1500` into an argument, normalise lenient booleans or validate numbers | t04, t15, t16, t34, t35 |
+| `process_kernel_params()` | `nvsd-init.service`, helper `cmdline`: writes `/run/nvsd/*` files that unit conditions and `EnvironmentFile=` consume. systemd cannot split `nvrc.smi.lgc=1500` into an argument, normalise lenient booleans or validate numbers | t04, t15, t16, t34, t35 |
 | `hash::self_exe()` (sha256 of the init, logged for `nvrc.log=info|debug|trace`) | `nvsd-hash.service`, helper `hash`: hashes `systemd`, `systemd-executor` and the helper, only when logging is on (conditions on the three levels) | t05 |
 | `guest_extension_image::mount_all()` | `nvsd-extensions.service` (helper `ext-plan`: device/params reconciliation, fail closed), `nvsd-extension@.service` (`veritysetup open`), `run-kata\x2dextensions-gpu.mount` (erofs), all gathered by `nvsd-extensions.target` | u13 |
 | `gpu_extension::setup()` bind firmware | `usr-lib-firmware-nvidia.mount` | u14 |
 | `gpu_extension::setup()` ldconfig + bind cache | `nvsd-ldcache.service` (static conf `/usr/lib/nvsd/ld.so.conf`) + `etc-ld.so.cache.mount` | u14 |
-| `mode::detect()` | `nvsd-mode.service`, helper `detect` (systemd cannot read sysfs file contents or VPD) + `nvsd-{cpu,gpu,servicevm-nvl4,servicevm-nvl5}.target` | u07, t33 |
+| `mode::detect()` | `nvsd-init.service`, helper `detect` (systemd cannot read sysfs file contents or VPD) + `nvsd-{cpu,gpu,servicevm-nvl4,servicevm-nvl5}.target` | u07, t33 |
 | `match detected.mode` | the four mode targets; per-unit `ConditionPathExists=/run/nvsd/...` (systemd pulls `Requires=/Wants=` dependencies into the transaction before conditions are evaluated, so every unit carries its own condition) | u07 |
-| `lockdown::disable_modules_loading()` | `nvsd-lockdown.service`, helper `lockdown` (a late sysctl write again) | t03 |
+| `lockdown::disable_modules_loading()` | `nvsd-lockdown.service`, helper `lockdown` (a late sysctl write again). In cpu mode nothing is loaded after the extension mount, so `detect` applies it itself and the unit is skipped (`/run/nvsd/locked`) | t03 |
 | `kata_agent::fork_agent()` | `kata-agent.service` (below) | t02 |
 
 ## Forked or exec'd processes
@@ -75,15 +75,15 @@ NVRC baseline and, where marked, only against nvsystemd. All of it runs on a SIM
    nvsd-cpu.target     nvsd-gpu.target        nvsd-servicevm-nvl4.target  nvsd-servicevm-nvl5.target
    (cond mode.cpu)     (cond mode.gpu)        (cond mode.servicevm-nvl4)  (cond mode.servicevm-nvl5)
 
- nvsd-base.target: tmp.mount, sys-kernel-config.mount, nvsd-syslog.socket, nvsd-cmdline.service (Wants nvsd-hash)
+ nvsd-base.target: nvsd-syslog.socket, nvsd-init.service (Wants nvsd-hash)
 
  nvsd-extensions.target: nvsd-extensions.service -> nvsd-extension@gpu -> run-kata\x2dextensions-gpu.mount
                           -> usr-lib-firmware-nvidia.mount | nvsd-ldcache.service -> etc-ld.so.cache.mount
- nvsd-mode.service (After nvsd-extensions.target)
+ nvsd-init.service: mounts /tmp and configfs, kernel parameters, mode detection (After nvsd-extensions.target)
 
  gpu mode (parallelism that NVRC leaves on the table is marked *):
 
-   nvsd-mode, nvsd-cmdline
+   nvsd-init
         |
    modprobe@nvidia -> modprobe@nvidia-uvm -> nvsd-uvm-tools (if nvrc.uvm.tools)
         |                                         |

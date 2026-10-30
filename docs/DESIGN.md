@@ -14,7 +14,7 @@ argument backed by the simulated boot tests listed in `docs/MAPPING.md`.
 | kata-agent survives memory pressure | `OOMScoreAdjust=-997` on `kata-agent.service` (t02). NVRC sets it on the process that is PID 1 | systemd and its helpers keep their default scores; a runaway daemon could in principle be killed first, as in NVRC |
 | kata-agent has RLIMIT_NOFILE = 1 Mi | `LimitNOFILE=1048576` (t02) | |
 | Fail closed on unverified extensions | `ext-plan` reconciles devices with the measured kernel command line, `veritysetup` runs before any mount, failure of either powers off (u13) | only names with a mount unit in the image are accepted |
-| Configuration only from the measured kernel command line | same: `nvsd-cmdline.service` is the only reader; unit files are immutable image content | the units themselves are part of the image and therefore of the dm-verity measurement; see below for the EnvironmentFile channel |
+| Configuration only from the measured kernel command line | same: `nvsd-init.service` (helper `cmdline`) is the only reader; unit files are immutable image content | the units themselves are part of the image and therefore of the dm-verity measurement; see below for the EnvironmentFile channel |
 | Child output goes to `/dev/null` unless debug logging | `StandardOutput=file:/run/nvsd/out`, a symlink created from `nvrc.log` (`/dev/null` or `/dev/kmsg`) | |
 | No shell, no scripts | no unit uses a shell; every `ExecStart=` is a binary. The helper is not a shell | |
 
