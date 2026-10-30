@@ -1,0 +1,23 @@
+nvsystemd
+Copyright 2026 the nvsystemd authors
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Design reference
+----------------
+This project is a systemd-based re-expression of NVIDIA NVRC
+(https://github.com/NVIDIA/nvrc, Apache-2.0, Copyright (c) NVIDIA CORPORATION).
+NVRC's behaviour (boot sequence, kernel parameters, mode detection, fail-fast
+semantics, process arguments) is the specification that nvsystemd follows. No NVRC
+source code is copied; the behaviour was reimplemented as systemd unit files and a
+small C helper. NVRC is also built, unmodified, as the benchmark baseline.
+
+Third-party components (NOT redistributed in this repository)
+-------------------------------------------------------------
+* systemd (https://systemd.io) as packaged by Fedora, LGPL-2.1-or-later. The image
+  build scripts copy /usr/lib/systemd/systemd, systemd-executor and the shared
+  libraries they need from the build host at image build time. Those files are
+  never committed.
+* The Linux kernel used for tests is taken from the host (/lib/modules/*/vmlinuz)
+  and is not committed either.
+* fixture/fakepci/fakepci.py implements a subset of the vfio-user wire protocol
+  (message layouts cross-checked against the Apache-2.0 rust-vmm vfio_user crate).

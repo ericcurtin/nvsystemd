@@ -1,0 +1,16 @@
+# Build products live outside the repo (NVSD_OUT, default /tmp/nvsd-work/out).
+# These patterns are a safety net: never commit kernels, images, binaries or rpm contents.
+/out/
+/target/
+*.cpio
+*.cpio.*
+*.raw
+*.img
+*.rpm
+vmlinuz*
+*.o
+*.so
+*.so.*
+__pycache__/
+*.pyc
+/bench/results/*.raw

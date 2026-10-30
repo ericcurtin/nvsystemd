@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Commit 0: the only unit. Reaching it proves systemd (stock Fedora binary) came up
+# as PID 1 from the initramfs. SuccessAction powers the VM off immediately so the
+# harness gets a clean, deterministic end of boot.
+[Unit]
+Description=nvsystemd boot complete
+DefaultDependencies=no
+StopWhenUnneeded=yes
+SuccessAction=poweroff-immediate
+FailureAction=poweroff-immediate
