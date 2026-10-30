@@ -8,7 +8,7 @@ DefaultDependencies=no
 After=modprobe@nvidia-uvm.service nvsd-cmdline.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/load.nvidia-uvm
 ConditionPathExists=/run/nvsd/uvm-tools
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

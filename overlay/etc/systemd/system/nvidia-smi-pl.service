@@ -10,7 +10,7 @@ DefaultDependencies=no
 After=modprobe@nvidia.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/smi.pl
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

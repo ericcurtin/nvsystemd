@@ -15,7 +15,7 @@ DefaultDependencies=no
 Requires=nvsd-syslog.socket
 After=nvsd-syslog.socket nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvsd-ib-guid.service nvlsm.service
 ConditionPathExists=/run/nvsd/fm
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=forking

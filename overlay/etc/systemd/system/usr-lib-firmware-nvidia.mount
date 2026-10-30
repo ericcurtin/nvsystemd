@@ -7,7 +7,7 @@ Description=gpu extension firmware
 DefaultDependencies=no
 After=run-kata\x2dextensions-gpu.mount
 ConditionPathIsDirectory=/run/kata-extensions/gpu/lib/firmware/nvidia
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Mount]
 What=/run/kata-extensions/gpu/lib/firmware/nvidia

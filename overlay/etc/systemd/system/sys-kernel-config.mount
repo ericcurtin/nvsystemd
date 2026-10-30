@@ -4,6 +4,7 @@
 [Unit]
 Description=Kernel configuration file system
 DefaultDependencies=no
+OnFailure=nvsd-poweroff.service
 ConditionPathExists=/sys/kernel/config
 
 [Mount]

@@ -11,7 +11,7 @@ Description=Load kernel module %i
 DefaultDependencies=no
 After=nvsd-mode.service nvsd-cmdline.service
 Requires=nvsd-mode.service
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

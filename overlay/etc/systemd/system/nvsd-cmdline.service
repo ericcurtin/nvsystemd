@@ -6,7 +6,7 @@
 [Unit]
 Description=Translate nvrc.* kernel parameters
 DefaultDependencies=no
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

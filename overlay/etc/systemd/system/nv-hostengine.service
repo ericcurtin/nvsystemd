@@ -2,7 +2,7 @@
 # NVRC: daemon.rs nv_hostengine() / spawn_if_dcgm(): the DCGM backend daemon, started in
 # mode_gpu only when nvrc.dcgm is true. nv-hostengine daemonizes (Type=forking). NVRC tracks the
 # child and checks its exit status once, in health_checks(); here any exit of the daemon fails
-# the unit and powers the VM off (FailureAction=), at any time before or after kata-agent.
+# the unit and powers the VM off (OnFailure=nvsd-poweroff.service), at any time before or after kata-agent.
 # NVRC starts it after the nvidia-smi clock/power calls; DCGM only monitors, so here it only
 # needs the driver and the persistence daemon and runs concurrently with nvidia-smi.
 [Unit]
@@ -11,7 +11,7 @@ DefaultDependencies=no
 After=modprobe@nvidia-uvm.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/dcgm
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=forking

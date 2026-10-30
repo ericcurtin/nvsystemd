@@ -5,6 +5,7 @@
 [Unit]
 Description=/tmp (tmpfs)
 DefaultDependencies=no
+OnFailure=nvsd-poweroff.service
 
 [Mount]
 What=tmpfs

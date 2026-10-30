@@ -8,7 +8,7 @@ DefaultDependencies=no
 Requires=nvsd-extension@gpu.service
 After=nvsd-extension@gpu.service
 ConditionPathExists=/run/nvsd/ext-gpu.env
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Mount]
 # /run/nvsd/ext-gpu.dev is a symlink to /dev/mapper/extension-gpu made by ext-plan: a What= under /dev

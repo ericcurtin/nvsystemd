@@ -12,7 +12,7 @@ DefaultDependencies=no
 After=nvsd-cmdline.service
 ConditionPathExistsGlob=|/sys/block/*/serial
 ConditionKernelCommandLine=|kata.extension.gpu.verity_params
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

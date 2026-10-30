@@ -712,6 +712,20 @@ static int cmd_ext_plan(void) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ poweroff
+ * NVRC lockdown.rs panic hook: message to /dev/kmsg, sync(), reboot(RB_POWER_OFF). Started by
+ * OnFailure=/OnSuccess= of every unit. (FailureAction=poweroff-immediate does the same but sleeps
+ * 5 s first, see overlay/etc/systemd/system/nvsd-poweroff.service. The MONITOR_UNIT variables that
+ * would name the failed unit are not set when several units trigger it at once, as happens when a
+ * failure cascades through the dependency chain; systemd's own log line names the unit.) */
+static int cmd_poweroff(void) {
+	static const char m[] = "<2>nvsystemd: boot unit failed or kata-agent exited, powering off\n";
+	write_file("/dev/kmsg", m, sizeof(m) - 1, 0, 0);
+	sc0(SYS_sync);
+	sc4(SYS_reboot, 0xfee1dead, 672274793, 0x4321FEDC, 0); /* LINUX_REBOOT_CMD_POWER_OFF */
+	return die("poweroff", "reboot(POWER_OFF) returned");
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -720,6 +734,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
+	if (seq(sub, "poweroff")) return cmd_poweroff();
 	if (seq(sub, "ext-plan")) return cmd_ext_plan();
 	if (seq(sub, "ib-guid")) return cmd_ib_guid(argc, argv);
 	if (seq(sub, "fm-config")) return cmd_fm_config(argc, argv);

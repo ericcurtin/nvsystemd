@@ -10,7 +10,7 @@ DefaultDependencies=no
 After=nv-hostengine.service nvsd-cmdline.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/dcgm
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=exec

@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: lockdown.rs set_panic_hook(): on any panic write "NVRC panic: ..." to /dev/kmsg, sync() and
+# power the VM off. Every unit of the boot has OnFailure=nvsd-poweroff.service, so a failure of
+# any process NVRC would have panicked on does the same here. (OnSuccess= of kata-agent too.)
+# Why not FailureAction=poweroff-immediate: systemd sleeps 5 s before acting on a unit's
+# FailureAction ("proceeding in 5s", measured here, not configurable), which is an eternity
+# for a fail-fast boot; a unit started by OnFailure= has no such delay.
+[Unit]
+Description=Power off the VM (fail fast)
+DefaultDependencies=no
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nvsd/nvsd-helper poweroff
+StandardOutput=null
+StandardError=null

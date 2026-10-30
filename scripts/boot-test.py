@@ -457,7 +457,7 @@ def t32_failing_daemon_powers_off(variant, v):
     """A daemon that exits non-zero (here nv-hostengine) must power the VM off. NVRC notices in
     health_checks() before handing off to kata-agent, but only if the daemon already died at that
     instant (point-in-time try_wait), so the test slows nvidia-ctk down to make that deterministic.
-    nvsystemd uses FailureAction= on the unit and does not depend on timing."""
+    nvsystemd uses OnFailure= on the unit and does not depend on timing."""
     rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.dcgm=on nvstub.fail.nv-hostengine=1 "
                  "nvstub.latency.nvidia-ctk=300", timeout=30)
     vm_off_without_agent(rep)

@@ -9,7 +9,7 @@ Description=nvidia-ctk cdi generate
 DefaultDependencies=no
 After=modprobe@nvidia-uvm.service nvidia-persistenced.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/mode.gpu
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

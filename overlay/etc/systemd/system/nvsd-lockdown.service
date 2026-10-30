@@ -6,8 +6,9 @@
 [Unit]
 Description=Disable kernel module loading (lockdown)
 DefaultDependencies=no
+Requires=nvsd-cpu.target nvsd-gpu.target nvsd-servicevm-nvl4.target nvsd-servicevm-nvl5.target
 After=nvsd-cpu.target nvsd-gpu.target nvsd-servicevm-nvl4.target nvsd-servicevm-nvl5.target
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

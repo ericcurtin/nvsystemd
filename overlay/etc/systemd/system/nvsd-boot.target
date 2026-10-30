@@ -8,6 +8,6 @@ DefaultDependencies=no
 Wants=nvsd-base.target nvsd-cpu.target nvsd-gpu.target nvsd-servicevm-nvl4.target nvsd-servicevm-nvl5.target
 Requires=kata-agent.service
 After=kata-agent.service
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 JobTimeoutSec=900
 JobTimeoutAction=poweroff-immediate

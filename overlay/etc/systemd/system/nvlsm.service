@@ -9,7 +9,7 @@ Description=nvlsm (NVLink subnet manager)
 DefaultDependencies=no
 After=nvsd-ib-guid.service nvsd-mode.service
 ConditionPathExists=/run/nvsd/nvl5
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=exec

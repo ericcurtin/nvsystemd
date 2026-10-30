@@ -8,7 +8,7 @@ Description=Refresh the loader cache for the gpu extension
 DefaultDependencies=no
 After=run-kata\x2dextensions-gpu.mount
 ConditionPathIsDirectory=/run/kata-extensions/gpu
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

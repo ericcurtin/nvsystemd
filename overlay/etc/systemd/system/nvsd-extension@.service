@@ -9,7 +9,7 @@ DefaultDependencies=no
 Requires=nvsd-extensions.service
 After=nvsd-extensions.service
 ConditionPathExists=/run/nvsd/ext-%i.env
-FailureAction=poweroff-immediate
+OnFailure=nvsd-poweroff.service
 
 [Service]
 Type=oneshot

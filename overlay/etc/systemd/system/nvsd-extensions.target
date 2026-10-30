@@ -4,5 +4,5 @@
 [Unit]
 Description=Composable image extensions mounted
 DefaultDependencies=no
-Wants=nvsd-extensions.service nvsd-extension@gpu.service run-kata\x2dextensions-gpu.mount usr-lib-firmware-nvidia.mount nvsd-ldcache.service etc-ld.so.cache.mount
+Requires=nvsd-extensions.service nvsd-extension@gpu.service run-kata\x2dextensions-gpu.mount usr-lib-firmware-nvidia.mount nvsd-ldcache.service etc-ld.so.cache.mount
 After=nvsd-extensions.service nvsd-extension@gpu.service run-kata\x2dextensions-gpu.mount usr-lib-firmware-nvidia.mount nvsd-ldcache.service etc-ld.so.cache.mount
