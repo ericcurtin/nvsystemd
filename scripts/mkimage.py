@@ -129,12 +129,11 @@ def add_base(c, latency_conf):
     for p, (ma, mi) in DEV_NODES.items():
         c.node(p, ma, mi, 0o666 if p != "/dev/kmsg" else 0o600)
     # --- fixture (identical across variants) ---
-    if os.path.exists(os.path.join(OUT, "nvstub")):  # commit 0: fixture arrives in the next commit
-        stub = read(os.path.join(OUT, "nvstub"))
-        c.hardlinks(sorted(STUB_NAMES), stub)
-        for p, text in FIXTURE_FILES.items():
-            c.file(p, text.encode())
-        c.file("/etc/nvstub.conf", latency_conf.encode())
+    stub = read(os.path.join(OUT, "nvstub"))
+    c.hardlinks(sorted(STUB_NAMES), stub)
+    for p, text in FIXTURE_FILES.items():
+        c.file(p, text.encode())
+    c.file("/etc/nvstub.conf", latency_conf.encode())
 
 
 def add_systemd(c, with_nvsd):

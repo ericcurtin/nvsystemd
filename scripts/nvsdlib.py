@@ -66,6 +66,7 @@ class Report:
         self.complete = False
         self.kata_host_t = None
         in_log = False
+        echo = []
         for t, ln in lines:
             if ln.startswith("NVSD-KATA-ENV "):
                 self.env = kv(ln)
@@ -88,10 +89,18 @@ class Report:
             elif ln == "NVSD-REPORT-END":
                 self.complete = True
             elif in_log:
-                parts = ln.split(" ", 4)
-                if len(parts) >= 4 and parts[0].isdigit():
-                    self.log.append({"t": int(parts[0]), "pid": int(parts[1]), "name": parts[2], "event": parts[3],
-                                     "detail": parts[4] if len(parts) > 4 else ""})
+                self._add(self.log, ln)
+            elif ln.startswith("NVSTUB "):
+                self._add(echo, ln[7:])
+        if not self.log:  # failure paths never print the report: fall back to the echoed lines
+            self.log = echo
+
+    @staticmethod
+    def _add(dst, ln):
+        parts = ln.split(" ", 4)
+        if len(parts) >= 4 and parts[0].isdigit():
+            dst.append({"t": int(parts[0]), "pid": int(parts[1]), "name": parts[2], "event": parts[3],
+                        "detail": parts[4] if len(parts) > 4 else ""})
 
     def events(self, name, event=None):
         return [e for e in self.log if e["name"] == name and (event is None or e["event"] == event)]

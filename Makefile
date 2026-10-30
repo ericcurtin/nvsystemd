@@ -25,3 +25,9 @@ clean:
 .PHONY: test
 test:
 	scripts/boot-test.sh
+
+.PHONY: nvrc image-nvsd image-nvrc test-nvrc
+nvrc:
+	scripts/build-nvrc.sh
+test-nvrc:
+	scripts/boot-test.sh --variant nvrc
