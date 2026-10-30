@@ -132,10 +132,27 @@ class Report:
 
 
 def boot(variant, fixture_text="", fixture_name="zero", pci=(), append="", timeout=30, compress="zstd3", kernel=None,
-         image=None, out=None, extra=None):
+         image=None, out=None, extra=None, qemu_extra=()):
     img = image or build_image(variant, fixture_text, fixture_name, compress, extra=extra)
-    r = vmrun.run(kernel or vmrun.DEFAULT_KERNEL, img, (vmrun.BASE_CMDLINE + " " + append).strip(), pci, timeout, out=out)
+    r = vmrun.run(kernel or vmrun.DEFAULT_KERNEL, img, (vmrun.BASE_CMDLINE + " " + append).strip(), pci, timeout, out=out,
+                 qemu_extra=qemu_extra)
     rep = Report(r["lines"])
     rep.rc, rep.wall, rep.timed_out = r["rc"], r["wall"], r["timed_out"]
     rep.text = "\n".join(ln for _t, ln in r["lines"])
     return rep
+
+
+def extension_disk(name="gpu", path=None):
+    """A tiny raw disk with an MBR and two partitions (data, hash) for the composable-extension tests, plus the
+    QEMU arguments attaching it as virtio-blk with serial extension-<name>. Contents are irrelevant (the
+    veritysetup stub never reads them)."""
+    import struct
+    path = path or os.path.join(OUT, "images", "extdisk-%s.raw" % name)
+    mbr = bytearray(512)
+    for i, (start, size) in enumerate(((2048, 1024), (4096, 1024))):
+        mbr[446 + 16 * i: 446 + 16 * i + 16] = struct.pack("<B3sB3sII", 0, b"\0\0\0", 0x83, b"\0\0\0", start, size)
+    mbr[510:512] = b"\x55\xaa"
+    with open(path, "wb") as f:
+        f.write(mbr)
+        f.truncate(3 * 1024 * 1024)
+    return ["-drive", "if=none,id=ext0,format=raw,file=%s" % path, "-device", "virtio-blk-pci,drive=ext0,serial=extension-%s" % name]

@@ -12,6 +12,7 @@ FailureAction=poweroff-immediate
 
 [Service]
 Type=exec
+EnvironmentFile=-/run/nvsd/kata.env
 ExecStart=/usr/bin/kata-agent
 # agent_setup(): RLIMIT_NOFILE 1M, oom_score_adj -997
 LimitNOFILE=1048576

@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: guest_extension_image.rs mount_extension(), the mount half: the verity device on
+# /run/kata-extensions/gpu as erofs, read-only, nosuid, nodev (executables allowed: the extension
+# ships binaries). systemd creates the mount point. The erofs module loads here, before lockdown.
+[Unit]
+Description=gpu extension (erofs on dm-verity)
+DefaultDependencies=no
+Requires=nvsd-extension@gpu.service
+After=nvsd-extension@gpu.service
+ConditionPathExists=/run/nvsd/ext-gpu.env
+FailureAction=poweroff-immediate
+
+[Mount]
+# /run/nvsd/ext-gpu.dev is a symlink to /dev/mapper/extension-gpu made by ext-plan: a What= under /dev
+# would make systemd wait for a .device unit that only udev can activate (there is no udev).
+What=/run/nvsd/ext-gpu.dev
+Where=/run/kata-extensions/gpu
+Type=erofs
+Options=ro,nosuid,nodev

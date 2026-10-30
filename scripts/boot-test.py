@@ -260,6 +260,71 @@ def u12_nvl5_flow_with_fake_infiniband(variant, v):
     assert_before(rep, ("nvlsm", "start"), ("nv-fabricmanager", "start"))
 
 
+VERITY = ("kata.extension.gpu.verity_params=root_hash=abc123,salt=def456,data_blocks=96512,"
+          "data_block_size=4096,hash_block_size=4096")
+
+
+@test
+def u13_extension_planning_fails_closed(variant, v):
+    """guest_extension_image.rs mount_all(): reconcile devices (virtio-blk serial extension-<name>) with
+    kata.extension.<name>.verity_params. Every mismatch or malformed field powers the VM off before kata-agent;
+    the good case reaches veritysetup with NVRC's exact argument list (the erofs mount then fails, since
+    the image has no dm-verity/erofs modules and the stub verity device is not real: still no agent)."""
+    disk = L.extension_disk("gpu")
+    # device present, no params: refuse an unverified mount
+    rep = L.boot(variant, append=ECHO, qemu_extra=disk)
+    vm_off_without_agent(rep)
+    assert not rep.events("veritysetup")
+    # params, no device
+    rep = L.boot(variant, append=ECHO + " " + VERITY)
+    vm_off_without_agent(rep)
+    # malformed: missing salt
+    rep = L.boot(variant, append=ECHO + " kata.extension.gpu.verity_params=root_hash=a,data_blocks=1,"
+                 "data_block_size=4096,hash_block_size=4096", qemu_extra=disk)
+    vm_off_without_agent(rep)
+    assert not rep.events("veritysetup")
+    # good parameters: veritysetup is run with the planned arguments
+    rep = L.boot(variant, append=ECHO + " " + VERITY, qemu_extra=disk)
+    vm_off_without_agent(rep)
+    argv = argv_of(rep, "veritysetup").split()
+    assert argv[:12] == ["open", "--no-superblock", "--hash", "sha256", "--data-block-size", "4096",
+                         "--hash-block-size", "4096", "--data-blocks", "96512", "--salt", "def456"], argv
+    assert argv[12].startswith("/dev/vda") and argv[13] == "extension-gpu" and argv[14].startswith("/dev/vda") \
+        and argv[15] == "abc123", argv
+    assert argv[12] != argv[14]
+
+
+@test
+def u14_gpu_extension_paths(variant, v):
+    """gpu_extension.rs with the extension mounted at /run/kata-extensions/gpu (simulated by a test-only unit that
+    builds a fake tree; the dm-verity/erofs mount itself cannot run in this VM): modprobe --dirname, binaries
+    resolved inside the extension, nvidia-ctk root flags, collectors file, loader cache regenerated and bound,
+    firmware bound, KATA_ATTESTER_VARIANT=nvidia."""
+    if variant != "nvsd":
+        return "skip: nvsd only"
+    unit = ("[Unit]\nDescription=test only: fake gpu extension\nDefaultDependencies=no\n"
+            "Before=nvsd-extensions.target nvsd-ldcache.service usr-lib-firmware-nvidia.mount nvsd-mode.service\n"
+            "[Service]\nType=oneshot\nExecStart=/usr/bin/nvstub mkext\n")
+    extra = {"/etc/systemd/system/test-fake-gpu-ext.service": unit,
+             "/etc/systemd/system/nvsd-extensions.target.d/test.conf": "[Unit]\nWants=test-fake-gpu-ext.service\n"}
+    root = "/run/kata-extensions/gpu"
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.dcgm=on", fixture_name="fakeext", extra=extra)
+    booted_agent(rep)
+    assert rep.env["attester_variant"] == "nvidia", rep.env
+    mods = [e["detail"].split(" ", 1)[1] for e in rep.events("modprobe", "start")]
+    assert mods == ["argv=--dirname %s nvidia NVreg_NvLinkDisable=1" % root, "argv=--dirname %s nvidia-uvm" % root], mods
+    assert argv_of(rep, "nvidia-ctk") == ("-d cdi generate --output=/var/run/cdi/nvidia.yaml --driver-root=%s "
+                                          "--dev-root=/ --nvidia-cdi-hook-path=%s/bin/nvidia-cdi-hook" % (root, root))
+    assert argv_of(rep, "dcgm-exporter") == "-k -f %s/etc/dcgm-exporter/default-counters.csv" % root
+    assert argv_of(rep, "ldconfig").startswith("-X -f ") and " -C /run/ld.so.cache conf=" in argv_of(rep, "ldconfig")
+    assert rep.first("ldconfig", "start")["detail"].endswith(
+        "conf=include /etc/ld.so.conf.d/*.conf;%s/usr/lib/x86_64-linux-gnu;" % root)
+    assert_before(rep, ("ldconfig", "done"), ("modprobe", "start"))
+    assert "/usr/lib/firmware/nvidia" in rep.mounts and "/etc/ld.so.cache" in rep.mounts, sorted(rep.mounts)
+    exes = {p["exe"] for ps in rep.procs.values() for p in ps}
+    assert root + "/bin/dcgm-exporter" in exes, exes
+
+
 @test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""

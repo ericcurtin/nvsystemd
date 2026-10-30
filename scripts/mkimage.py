@@ -33,6 +33,9 @@ STUB_NAMES = {
     "/usr/bin/nv-fabricmanager": "nv-fabricmanager",
     "/usr/sbin/nvlsm": "nvlsm",
     "/usr/bin/kata-agent": "kata-agent",
+    "/usr/sbin/ldconfig": "ldconfig",
+    "/usr/sbin/veritysetup": "veritysetup",
+    "/usr/bin/nvstub": "nvstub",  # test aid (mkext); the multi-call binary under its own name
 }
 
 FIXTURE_FILES = {
@@ -136,6 +139,7 @@ def add_base(c, latency_conf):
     for p, text in FIXTURE_FILES.items():
         c.file(p, text.encode())
     c.file("/etc/nvstub.conf", latency_conf.encode())
+    c.file("/etc/ld.so.cache", b"")  # bind target for the gpu-extension loader cache (baked into real rootfs images)
 
 
 def add_systemd(c, with_nvsd):

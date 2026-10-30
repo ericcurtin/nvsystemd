@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: guest_extension_image.rs mount_all(), planning half. Reconciles cold-plugged
+# extension devices (virtio-blk serial "extension-<name>") 1:1 with the measured kernel
+# command line (kata.extension.<name>.verity_params=...), failing closed on any mismatch, and
+# writes /run/nvsd/ext-<name>.env for nvsd-extension@<name>.service. Skipped entirely (no process)
+# when the VM has neither a block device with a serial nor extension parameters.
+# Deliberate difference: a stray kata.extension.<name>.verity_params for a name other than the shipped
+# "gpu" is only noticed when a block device with a serial exists.
+[Unit]
+Description=Plan composable image extensions (fail closed)
+DefaultDependencies=no
+After=nvsd-cmdline.service
+ConditionPathExistsGlob=|/sys/block/*/serial
+ConditionKernelCommandLine=|kata.extension.gpu.verity_params
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper ext-plan
+StandardOutput=null
+StandardError=null

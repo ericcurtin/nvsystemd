@@ -14,6 +14,7 @@
 #include "../common/mini.h"
 
 #define RUN "/run/nvsd"
+#define GPU_EXT_ROOT "/run/kata-extensions/gpu"
 
 static char g_cmdline[4096];
 
@@ -368,7 +369,27 @@ static int cmd_detect(void) {
 		put("fm.env", svc ? (nvl5 ? "NVSD_FM_MODE=1\nNVSD_FM_POLICY=symmetric\n" : "NVSD_FM_MODE=1\nNVSD_FM_POLICY=greedy\n")
 				  : (nvl5 ? "NVSD_FM_MODE=0\nNVSD_FM_POLICY=symmetric\n" : "NVSD_FM_MODE=0\nNVSD_FM_POLICY=greedy\n"), 0644);
 	}
-	if (gpus == 1) put("modprobe-nvidia.env", "NVSD_PARAMS=NVreg_NvLinkDisable=1\n", 0644);
+	/* gpu_extension.rs: with the "gpu" extension mounted, NVIDIA modules load via modprobe --dirname <root>,
+	 * nvidia-ctk gets --driver-root/--dev-root/--nvidia-cdi-hook-path, binaries and configs resolve under the
+	 * root, and kata-agent gets KATA_ATTESTER_VARIANT=nvidia. Units read these env files. */
+	int ext = 0;
+	{
+		long fd = sys_open(GPU_EXT_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+		if (fd >= 0) { sys_close((int)fd); ext = 1; }
+	}
+	const char *dn = ext ? "NVSD_DIRNAME=--dirname " GPU_EXT_ROOT "\n" : "";
+	const char *np = gpus == 1 ? "NVSD_PARAMS=NVreg_NvLinkDisable=1\n" : "";
+	if (ext || gpus == 1) {
+		char e[200];
+		struct buf eb = BUF_INIT(e);
+		b_str(&eb, dn); b_str(&eb, np); b_term(&eb);
+		put("modprobe-nvidia.env", e, 0644);
+	}
+	if (ext) {
+		put("modprobe-nvidia-uvm.env", dn, 0644);
+		put("gpu-ext.env", "NVSD_GPU_ROOT=" GPU_EXT_ROOT "\nNVSD_CTK_ARGS=--driver-root=" GPU_EXT_ROOT " --dev-root=/ --nvidia-cdi-hook-path=" GPU_EXT_ROOT "/bin/nvidia-cdi-hook\n", 0644);
+		put("kata.env", "KATA_ATTESTER_VARIANT=nvidia\n", 0644);
+	}
 	return 0;
 }
 
@@ -538,6 +559,159 @@ static int cmd_ib_guid(int argc, char **argv) {
 	return die("ib-guid", "nvl5 requires SW_MNG IB device with valid port GUID");
 }
 
+/* ------------------------------------------------------------------ ext-plan
+ * NVRC guest_extension_image.rs mount_all(), the planning half: cold-plugged composable image
+ * extensions are virtio-blk devices whose serial is "extension-<name>"; their dm-verity
+ * parameters arrive on the measured kernel command line as
+ *   kata.extension.<name>.verity_params=root_hash=..,salt=..,data_blocks=..,data_block_size=..,hash_block_size=..
+ * NVRC fails closed: a device without parameters, parameters without a device, a bad name, a
+ * missing or malformed field, or a missing data/hash partition is fatal. This subcommand does
+ * all of that checking and writes /run/nvsd/ext-<name>.env with the veritysetup argument list
+ * (NVSD_VERITY_ARGS) for nvsd-extension@<name>.service; the mount itself is a mount unit.
+ * systemd can neither enumerate devices by serial nor split a key=a,b=c value.
+ *
+ * Difference from NVRC: systemd cannot instantiate units dynamically, so only extension names
+ * that have a mount unit in the image (shipped: gpu) are accepted; any other name is fatal. */
+static int ext_name_ok(const char *n) {
+	if (!*n) return 0;
+	int alldots = 1;
+	for (const char *c = n; *c; c++) {
+		if (*c != '.') alldots = 0;
+		if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z') || *c == '_' || *c == '-' || *c == '.')) return 0;
+	}
+	return !alldots;
+}
+
+static int ext_field(const char *list, const char *key, char *out, usize cap) {
+	usize kl = slen(key);
+	const char *p = list;
+	int found = 0;
+	while (*p) {
+		const char *e = p;
+		while (*e && *e != ',') e++;
+		if ((usize)(e - p) > kl && !memcmp(p, key, kl) && p[kl] == '=') {
+			usize vl = (usize)(e - p) - kl - 1;
+			if (vl >= cap) vl = cap - 1;
+			memcpy(out, p + kl + 1, vl);
+			out[vl] = 0;
+			found = 1;
+		}
+		p = *e ? e + 1 : e;
+	}
+	return found;
+}
+
+static int cmd_ext_plan(void) {
+	enum { MAXE = 8 };
+	static char pn[MAXE][64], pv[MAXE][512], dn[MAXE][64], dd[MAXE][32];
+	int np = 0, nd = 0;
+	/* parameters, in command-line order */
+	const char *p = g_cmdline;
+	while (*p) {
+		while (*p == ' ' || *p == '\n' || *p == '\t') p++;
+		const char *w = p;
+		while (*p && *p != ' ' && *p != '\n' && *p != '\t') p++;
+		usize wl = (usize)(p - w);
+		const char *eq = w;
+		while (eq < w + wl && *eq != '=') eq++;
+		if (eq == w + wl) continue;
+		usize kl = (usize)(eq - w);
+		if (kl > 15 + 14 && !memcmp(w, "kata.extension.", 15) && !memcmp(w + kl - 14, ".verity_params", 14)) {
+			usize nl = kl - 15 - 14;
+			if (np >= MAXE || nl >= 64) return die("ext-plan", "too many or too long extension parameters");
+			memcpy(pn[np], w + 15, nl); pn[np][nl] = 0;
+			usize vl = wl - kl - 1;
+			if (vl >= 512) return die("ext-plan", "verity_params too long");
+			memcpy(pv[np], eq + 1, vl); pv[np][vl] = 0;
+			np++;
+		}
+	}
+	/* devices */
+	struct dirit d;
+	if (dir_open(&d, "/sys/block") == 0) {
+		const char *e;
+		while ((e = dir_next(&d))) {
+			char sp[300], ser[96];
+			path_join3(sp, sizeof(sp), "/sys/block", e, "serial");
+			if (read_file(sp, ser, sizeof(ser)) < 0) continue;
+			rtrim(ser);
+			if (!sstarts(ser, "extension-")) continue;
+			const char *name = ser + 10;
+			if (!ext_name_ok(name)) return die("ext-plan", "invalid extension name");
+			if (nd >= MAXE || slen(e) >= 32) return die("ext-plan", "too many extension devices");
+			memcpy(dn[nd], name, slen(name) + 1);
+			memcpy(dd[nd], e, slen(e) + 1);
+			nd++;
+		}
+		dir_close(&d);
+	}
+	for (int i = 0; i < np; i++) {
+		int ok = 0;
+		for (int j = 0; j < nd; j++) if (seq(pn[i], dn[j])) ok = 1;
+		if (!ok) return die("ext-plan", "verity params on cmdline but no extension device");
+	}
+	ensure_run_dir();
+	for (int j = 0; j < nd; j++) {
+		int k = -1;
+		for (int i = 0; i < np; i++) if (seq(pn[i], dn[j])) k = i; /* NVRC uses the first match */
+		for (int i = np - 1; i >= 0; i--) if (seq(pn[i], dn[j])) k = i;
+		if (k < 0) return die("ext-plan", "extension device present but no verity params; refusing unverified mount");
+		char root_hash[256], salt[256], db[24], dbs[24], hbs[24];
+		if (!ext_field(pv[k], "root_hash", root_hash, sizeof(root_hash))) return die("ext-plan", "verity_params missing root_hash");
+		if (!ext_field(pv[k], "salt", salt, sizeof(salt))) return die("ext-plan", "verity_params missing salt");
+		u32 n1, n2, n3;
+		if (!ext_field(pv[k], "data_blocks", db, sizeof(db)) || !parse_u32(db, &n1) || !n1) return die("ext-plan", "verity_params missing or invalid data_blocks");
+		if (!ext_field(pv[k], "data_block_size", dbs, sizeof(dbs)) || !parse_u32(dbs, &n2) || !n2) return die("ext-plan", "verity_params missing or invalid data_block_size");
+		if (!ext_field(pv[k], "hash_block_size", hbs, sizeof(hbs)) || !parse_u32(hbs, &n3) || !n3) return die("ext-plan", "verity_params missing or invalid hash_block_size");
+		/* only characters that survive systemd's EnvironmentFile + word splitting */
+		for (const char *c = root_hash; *c; c++) if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z'))) return die("ext-plan", "invalid root_hash");
+		for (const char *c = salt; *c; c++) if (!((*c >= '0' && *c <= '9') || (*c >= 'a' && *c <= 'z') || (*c >= 'A' && *c <= 'Z'))) return die("ext-plan", "invalid salt");
+		/* mount unit must exist for this name */
+		char mu[200];
+		struct buf mb = BUF_INIT(mu);
+		b_str(&mb, "/etc/systemd/system/run-kata\\x2dextensions-"); b_str(&mb, dn[j]); b_str(&mb, ".mount"); b_term(&mb);
+		char probe[8];
+		if (read_file(mu, probe, sizeof(probe)) < 0) return die("ext-plan", "no mount unit for this extension name in the image");
+		/* partitions: data = partition 1, hash = partition 2, from sysfs */
+		char dir[200], data[64] = "", hash[64] = "";
+		struct buf db2 = BUF_INIT(dir);
+		b_str(&db2, "/sys/block/"); b_str(&db2, dd[j]); b_term(&db2);
+		struct dirit pd;
+		if (dir_open(&pd, dir) < 0) return die("ext-plan", "cannot read extension device");
+		const char *pe;
+		while ((pe = dir_next(&pd))) {
+			char pp[400], num[16];
+			path_join3(pp, sizeof(pp), dir, pe, "partition");
+			if (read_file(pp, num, sizeof(num)) < 0) continue;
+			rtrim(num);
+			struct buf nb = { seq(num, "1") ? data : hash, 0, 64 };
+			if (!seq(num, "1") && !seq(num, "2")) continue;
+			b_str(&nb, "/dev/"); b_str(&nb, pe); b_term(&nb);
+		}
+		dir_close(&pd);
+		if (!data[0]) return die("ext-plan", "extension device: missing data partition (1)");
+		if (!hash[0]) return die("ext-plan", "extension device: missing hash partition (2)");
+		char env[1400], fn[96];
+		struct buf eb = BUF_INIT(env);
+		b_str(&eb, "NVSD_VERITY_ARGS=open --no-superblock --hash sha256 --data-block-size "); b_u64(&eb, n2);
+		b_str(&eb, " --hash-block-size "); b_u64(&eb, n3); b_str(&eb, " --data-blocks "); b_u64(&eb, n1);
+		b_str(&eb, " --salt "); b_str(&eb, salt); b_char(&eb, ' '); b_str(&eb, data);
+		b_str(&eb, " extension-"); b_str(&eb, dn[j]); b_char(&eb, ' '); b_str(&eb, hash); b_char(&eb, ' '); b_str(&eb, root_hash); b_char(&eb, '\n'); b_term(&eb);
+		struct buf fb = BUF_INIT(fn);
+		b_str(&fb, "ext-"); b_str(&fb, dn[j]); b_str(&fb, ".env"); b_term(&fb);
+		if (put(fn, env, 0644) < 0) return die("ext-plan", "cannot write extension plan");
+		/* the mount unit uses this symlink as What=: systemd adds an implicit dependency on a .device unit for
+		 * What=/dev/..., which only udev (absent here) ever activates, so the unit would wait for its timeout */
+		char lnk[96], tgt[96];
+		struct buf lb = BUF_INIT(lnk), tb = BUF_INIT(tgt);
+		b_str(&lb, RUN "/ext-"); b_str(&lb, dn[j]); b_str(&lb, ".dev"); b_term(&lb);
+		b_str(&tb, "/dev/mapper/extension-"); b_str(&tb, dn[j]); b_term(&tb);
+		sys_unlink(lnk);
+		if (sys_symlink(tgt, lnk) < 0) return die("ext-plan", "cannot create the device symlink");
+	}
+	return 0;
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -546,6 +720,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
+	if (seq(sub, "ext-plan")) return cmd_ext_plan();
 	if (seq(sub, "ib-guid")) return cmd_ib_guid(argc, argv);
 	if (seq(sub, "fm-config")) return cmd_fm_config(argc, argv);
 	if (seq(sub, "uvm-tools")) return cmd_uvm_tools(argc, argv);

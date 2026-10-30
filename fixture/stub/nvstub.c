@@ -384,6 +384,69 @@ static int do_nvlsm(void) {
 	return 0;
 }
 
+
+/* ldconfig -X -f <conf> -C /run/ld.so.cache : logs the conf content, creates the cache file */
+static int do_ldconfig(void) {
+	if (!(g_argc == 6 && seq(g_argv[1], "-X") && seq(g_argv[2], "-f") && seq(g_argv[4], "-C") &&
+	      seq(g_argv[5], "/run/ld.so.cache")))
+		badargv("ldconfig", "unsupported invocation");
+	static char conf[2048];
+	if (read_file(g_argv[3], conf, sizeof(conf)) < 0) { log_event("ldconfig", "ERROR", "conf missing"); return 1; }
+	char d[1400];
+	struct buf b = BUF_INIT(d);
+	b_str(&b, g_joined); b_str(&b, " conf=");
+	for (const char *p = conf; *p; p++) b_char(&b, *p == '\n' ? ';' : *p);
+	b_term(&b);
+	log_event("ldconfig", "start", d);
+	write_file("/run/ld.so.cache", "simulated ld.so.cache\n", 22, O_CREAT | O_TRUNC, 0644);
+	log_event("ldconfig", "done", "");
+	return 0;
+}
+
+/* veritysetup open --no-superblock --hash sha256 --data-block-size N --hash-block-size N --data-blocks N
+ *             --salt S <data> <name> <hash> <root_hash> */
+static int do_veritysetup(void) {
+	if (!(g_argc == 17 && seq(g_argv[1], "open") && seq(g_argv[2], "--no-superblock") && seq(g_argv[3], "--hash") &&
+	      seq(g_argv[4], "sha256") && seq(g_argv[5], "--data-block-size") && seq(g_argv[7], "--hash-block-size") &&
+	      seq(g_argv[9], "--data-blocks") && seq(g_argv[11], "--salt")))
+		badargv("veritysetup", "unsupported invocation");
+	log_event("veritysetup", "start", g_joined);
+	i64 f = conf_num("veritysetup", NULL, "fail", -1);
+	if (f >= 0) { log_event("veritysetup", "FAIL", ""); return (int)f; }
+	log_event("veritysetup", "done", "");
+	return 0;
+}
+
+/* test aid: nvstub mkext: build a fake "gpu" extension tree under /run/kata-extensions/gpu */
+static int do_mkext(void) {
+	static const char *const DIRS[] = { "/run/kata-extensions/gpu/bin", "/run/kata-extensions/gpu/sbin",
+		"/run/kata-extensions/gpu/etc/dcgm-exporter", "/run/kata-extensions/gpu/usr/share/nvidia/nvswitch",
+		"/run/kata-extensions/gpu/usr/share/nvidia/nvlsm", "/run/kata-extensions/gpu/lib/firmware/nvidia",
+		"/run/kata-extensions/gpu/usr/lib/x86_64-linux-gnu" };
+	for (usize i = 0; i < sizeof(DIRS) / sizeof(DIRS[0]); i++) mkdir_p(DIRS[i]);
+	static const struct { const char *link, *target; } L[] = {
+		{ "/run/kata-extensions/gpu/bin/nvidia-smi", "/usr/bin/nvidia-smi" },
+		{ "/run/kata-extensions/gpu/bin/nvidia-persistenced", "/usr/bin/nvidia-persistenced" },
+		{ "/run/kata-extensions/gpu/bin/nv-hostengine", "/usr/bin/nv-hostengine" },
+		{ "/run/kata-extensions/gpu/bin/dcgm-exporter", "/usr/bin/dcgm-exporter" },
+		{ "/run/kata-extensions/gpu/bin/nvidia-ctk", "/usr/bin/nvidia-ctk" },
+		{ "/run/kata-extensions/gpu/bin/nv-fabricmanager", "/usr/bin/nv-fabricmanager" },
+		{ "/run/kata-extensions/gpu/sbin/nvlsm", "/usr/sbin/nvlsm" } };
+	/* real copies (not symlinks) so /proc/<pid>/exe of a running daemon proves which binary was used */
+	static char bin[65536];
+	long bn = read_file("/usr/bin/nvstub", bin, sizeof(bin));
+	if (bn <= 0) return 1;
+	for (usize i = 0; i < sizeof(L) / sizeof(L[0]); i++) {
+		write_file(L[i].link, bin, (usize)bn, O_CREAT | O_TRUNC, 0755);
+		sys_chmod(L[i].link, 0755);
+	}
+	write_file("/run/kata-extensions/gpu/etc/dcgm-exporter/default-counters.csv", "# SIMULATED ext collectors\n", 27, O_CREAT | O_TRUNC, 0644);
+	write_file("/run/kata-extensions/gpu/usr/share/nvidia/nvswitch/fabricmanager.cfg", "# SIMULATED ext cfg\nFABRIC_MODE=0\nPARTITION_RAIL_POLICY=greedy\n", 56, O_CREAT | O_TRUNC, 0644);
+	write_file("/run/kata-extensions/gpu/usr/share/nvidia/nvlsm/nvlsm.conf", "# SIMULATED ext nvlsm\n", 22, O_CREAT | O_TRUNC, 0644);
+	write_file("/run/kata-extensions/gpu/lib/firmware/nvidia/gsp.bin", "fw\n", 3, O_CREAT | O_TRUNC, 0644);
+	return 0;
+}
+
 /* ---------------------------- kata-agent ---------------------------- */
 static int out_fd = 1;
 
@@ -714,6 +777,9 @@ static int real_main(int argc, char **argv) {
 	if (seq(g_tool, "nv-fabricmanager")) return do_fm();
 	if (seq(g_tool, "nvlsm")) return do_nvlsm();
 	if (seq(g_tool, "kata-agent")) return do_kata();
+	if (seq(g_tool, "ldconfig")) return do_ldconfig();
+	if (seq(g_tool, "veritysetup")) return do_veritysetup();
+	if (seq(g_tool, "mkext")) return do_mkext();
 	say(2, "nvstub: unknown tool name\n");
 	return 127;
 }

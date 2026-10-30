@@ -38,24 +38,24 @@ PCI_PRESETS = {
 }
 
 
-def qemu_cmd(kernel, initrd, append, pci_args, smp=2, mem=512, qemu="qemu-system-x86_64"):
+def qemu_cmd(kernel, initrd, append, pci_args, smp=2, mem=512, qemu="qemu-system-x86_64", extra=()):
     return [
         qemu, "-machine", "q35,accel=kvm,memory-backend=pc.ram", "-cpu", "host",
         "-object", "memory-backend-memfd,id=pc.ram,size=%dM,share=on" % mem,
         "-smp", str(smp), "-m", str(mem), "-nodefaults", "-no-user-config", "-display", "none",
         "-chardev", "stdio,id=con0,signal=off", "-serial", "chardev:con0", "-monitor", "none",
         "-no-reboot", "-kernel", kernel, "-initrd", initrd, "-append", append,
-    ] + pci_args
+    ] + pci_args + list(extra)
 
 
-def run(kernel, initrd, append, pci=(), timeout=30, smp=2, mem=512, out=None):
+def run(kernel, initrd, append, pci=(), timeout=30, smp=2, mem=512, out=None, qemu_extra=()):
     """Returns dict(lines=[(t, text)], rc, wall, timed_out)."""
     specs = []
     for p in pci:
         specs += PCI_PRESETS[p] if p in PCI_PRESETS else [p]
     sockdir = tempfile.mkdtemp(prefix="nvsd-pci-")
     devs, pci_args = fakepci.start_devices(specs, sockdir)
-    cmd = ["timeout", "-s", "KILL", str(timeout)] + qemu_cmd(kernel, initrd, append, pci_args, smp, mem)
+    cmd = ["timeout", "-s", "KILL", str(timeout)] + qemu_cmd(kernel, initrd, append, pci_args, smp, mem, extra=qemu_extra)
     t0 = time.monotonic()
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     lines = []

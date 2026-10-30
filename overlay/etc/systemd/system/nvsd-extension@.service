@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: guest_extension_image.rs mount_extension(), the veritysetup half: `veritysetup open
+# --no-superblock --hash sha256 ... <data> extension-<name> <hash> <root hash>` (argument list from
+# /run/nvsd/ext-%i.env). The erofs mount is the matching run-kata\x2dextensions-%i.mount unit.
+# A failed verification powers the VM off: no unverified extension is ever mounted.
+[Unit]
+Description=dm-verity open of extension %i
+DefaultDependencies=no
+Requires=nvsd-extensions.service
+After=nvsd-extensions.service
+ConditionPathExists=/run/nvsd/ext-%i.env
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+EnvironmentFile=/run/nvsd/ext-%i.env
+ExecStart=/usr/sbin/veritysetup $NVSD_VERITY_ARGS
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

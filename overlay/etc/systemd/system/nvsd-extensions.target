@@ -1,0 +1,8 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC main.rs: guest_extension_image::mount_all() then gpu_extension::setup(), "before any driver
+# load". Mode detection and every module load are ordered after this target.
+[Unit]
+Description=Composable image extensions mounted
+DefaultDependencies=no
+Wants=nvsd-extensions.service nvsd-extension@gpu.service run-kata\x2dextensions-gpu.mount usr-lib-firmware-nvidia.mount nvsd-ldcache.service etc-ld.so.cache.mount
+After=nvsd-extensions.service nvsd-extension@gpu.service run-kata\x2dextensions-gpu.mount usr-lib-firmware-nvidia.mount nvsd-ldcache.service etc-ld.so.cache.mount
