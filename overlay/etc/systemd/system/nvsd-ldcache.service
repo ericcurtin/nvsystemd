@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: gpu_extension.rs refresh_ldcache_in(): regenerate the loader cache with the extension's
+# library directory added (ldconfig -X -f <conf> -C /run/ld.so.cache); etc-ld.so.cache.mount then
+# binds the result over /etc/ld.so.cache (the base rootfs is read-only). The conf is static
+# (/usr/lib/nvsd/ld.so.conf) because the extension path is fixed.
+[Unit]
+Description=Refresh the loader cache for the gpu extension
+DefaultDependencies=no
+After=run-kata\x2dextensions-gpu.mount
+ConditionPathIsDirectory=/run/kata-extensions/gpu
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/sbin/ldconfig -X -f /usr/lib/nvsd/ld.so.conf -C /run/ld.so.cache
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

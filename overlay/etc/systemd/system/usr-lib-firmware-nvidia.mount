@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: gpu_extension.rs bind_firmware(): bind the extension's firmware tree over the kernel
+# firmware loader's search directory so request_firmware (GSP) finds it. No-op when the
+# extension ships no firmware. (/lib is a symlink to /usr/lib, so the mount is named after /usr/lib.)
+[Unit]
+Description=gpu extension firmware
+DefaultDependencies=no
+After=run-kata\x2dextensions-gpu.mount
+ConditionPathIsDirectory=/run/kata-extensions/gpu/lib/firmware/nvidia
+FailureAction=poweroff-immediate
+
+[Mount]
+What=/run/kata-extensions/gpu/lib/firmware/nvidia
+Where=/usr/lib/firmware/nvidia
+Type=none
+Options=bind
