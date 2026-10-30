@@ -26,6 +26,8 @@
  *   fail.<tool>[.<sub>]=<exitcode>  fail instead of succeeding
  *   grace_ms=<ms>                   kata-agent stub: wait before reporting
  *   log=<path>                      log file (default /run/nvstub.log)
+ *   kmsg_grep=<text>                kata-agent stub: print kernel log records containing <text> as
+ *                                   "NVSD-KMSG <message>" (tests)
  *   echo=1                          also print every log line to the console as
  *                                   "NVSTUB <line>" (tests only: costs console time)
  *
@@ -381,6 +383,16 @@ static int out_fd = 1;
 
 static void emit(const char *s) { sys_write(out_fd, s, slen(s)); }
 
+static char g_grep[48];
+static int g_kmsg_emit;
+static void kmsg_match(const char *msg) {
+	if (!g_kmsg_emit || !g_grep[0] || !sfind(msg, g_grep) || sfind(msg, "ommand line")) return;
+	emit("NVSD-KMSG ");
+	const char *e = msg; while (*e && *e != '\n') e++;
+	sys_write(out_fd, msg, (usize)(e - msg));
+	emit("\n");
+}
+
 static u64 init_ts_us(void) {
 	long fd = sys_open("/dev/kmsg", O_RDONLY | O_NONBLOCK | O_CLOEXEC, 0);
 	if (fd < 0) return 0;
@@ -394,13 +406,13 @@ static u64 init_ts_us(void) {
 		const char *semi = rec;
 		while (*semi && *semi != ';') semi++;
 		if (!*semi) continue;
-		if (sstarts(semi + 1, "Run /") && sfind(semi + 1, "as init process")) {
+		kmsg_match(semi + 1);
+		if (!ts && sstarts(semi + 1, "Run /") && sfind(semi + 1, "as init process")) {
 			/* "pri,seq,ts_us,flags;msg" */
 			const char *p = rec;
 			int commas = 0;
 			while (*p && commas < 2) { if (*p == ',') commas++; p++; }
 			ts = parse_u64_loose(p);
-			break;
 		}
 	}
 	sys_close((int)fd);
@@ -595,6 +607,10 @@ static int do_kata(void) {
 	long fd = sys_open("/dev/console", O_WRONLY | 0400 /* O_NOCTTY */, 0);
 	if (fd >= 0) out_fd = (int)fd;
 	log_event("kata-agent", "start", g_joined);
+	{
+		char v[48];
+		if (conf_get("kmsg_grep", v, sizeof(v))) memcpy(g_grep, v, slen(v) + 1);
+	}
 	u64 init_ts = init_ts_us();
 
 	/* everything the real kata-agent environment would care about, sampled immediately */
@@ -642,6 +658,8 @@ static int do_kata(void) {
 	if (grace > 0) sleep_ms((u64)grace);
 	mem_line("after-grace");
 	census("after-grace");
+	g_kmsg_emit = 1;
+	init_ts_us(); /* second pass over the kernel log only to print kmsg_grep matches */
 
 	/* dump the stub log so the host can assert on ordering and argv */
 	emit("NVSD-LOG-BEGIN\n");

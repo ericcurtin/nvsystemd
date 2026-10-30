@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: hash.rs self_exe(): sha256 of the running init binary, logged at info level so it can be
+# matched against a release digest. NVRC computes it unconditionally and only *prints* it for
+# nvrc.log=info|debug|trace; here the work is skipped entirely unless it would be printed.
+# Not ordered before anything: it is informational and must not delay boot.
+[Unit]
+Description=Log sha256 of the init binaries
+DefaultDependencies=no
+After=nvsd-cmdline.service
+ConditionKernelCommandLine=|nvrc.log=info
+ConditionKernelCommandLine=|nvrc.log=debug
+ConditionKernelCommandLine=|nvrc.log=trace
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/nvsd/nvsd-helper hash /usr/lib/systemd/systemd /usr/lib/systemd/systemd-executor /usr/lib/nvsd/nvsd-helper
+StandardOutput=null
+StandardError=null

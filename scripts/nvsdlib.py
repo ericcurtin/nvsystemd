@@ -64,6 +64,7 @@ class Report:
         self.census = {}
         self.mounts = {}
         self.facts = {}
+        self.kmsg = []
         self.log = []
         self.complete = False
         self.kata_host_t = None
@@ -85,6 +86,8 @@ class Report:
             elif ln.startswith("NVSD-MOUNT "):
                 _, mp, fs, opts = ln.split(" ", 3)
                 self.mounts[mp] = (fs, opts.split(","))
+            elif ln.startswith("NVSD-KMSG "):
+                self.kmsg.append(ln[10:])
             elif ln.startswith("NVSD-FACT "):
                 self.facts = kv(ln)
             elif ln.startswith("NVSD-CENSUS "):

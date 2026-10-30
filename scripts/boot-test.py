@@ -128,6 +128,20 @@ def t04_socket_buffer_sysctls_and_log(variant, v):
 
 
 @test
+def t05_init_digest_logged_only_when_logging(variant, v):
+    """hash.rs self_exe(): the init's sha256 appears in the kernel log with nvrc.log=info and matches the
+    file; with logging off nothing is printed. (NVRC hashes itself; nvsystemd hashes systemd + helper.)"""
+    import hashlib
+    rep = L.boot(variant, append="nvrc.log=info nvstub.kmsg_grep=sha256=")
+    booted_agent(rep)
+    want = hashlib.sha256(open(L.NVRC_BIN if variant == "nvrc" else "/usr/lib/systemd/systemd", "rb").read()).hexdigest()
+    assert any("sha256=" + want in m for m in rep.kmsg), (want, rep.kmsg)
+    rep = L.boot(variant, append="nvstub.kmsg_grep=sha256=")
+    booted_agent(rep)
+    assert not rep.kmsg, rep.kmsg
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)
