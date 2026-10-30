@@ -591,6 +591,15 @@ static void facts(void) {
 		b_char(&b, ' '); b_str(&b, F[i].key); b_char(&b, '='); b_str(&b, v);
 	}
 	b_str(&b, " dev_log="); b_str(&b, exists("/dev/log") ? "1" : "0");
+	{ /* /dev/nvidia-uvm-tools: mode:major:minor */
+		struct { u64 dev, ino, nlink; u32 mode, uid, gid, pad; u64 rdev; } st;
+		char sb[256];
+		b_str(&b, " uvm_tools=");
+		if (sc4(SYS_newfstatat, AT_FDCWD, (long)"/dev/nvidia-uvm-tools", (long)sb, 0x100) == 0) {
+			memcpy(&st, sb, sizeof(st));
+			b_hex(&b, st.mode, 6); b_char(&b, ':'); b_u64(&b, (st.rdev >> 8) & 0xfff); b_char(&b, ':'); b_u64(&b, (st.rdev & 0xff) | ((st.rdev >> 12) & 0xfff00));
+		} else b_str(&b, "none");
+	}
 	b_str(&b, "\n"); b_term(&b);
 	emit(l);
 }

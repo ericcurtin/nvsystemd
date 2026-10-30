@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: uvm.rs setup_uvm_tools(), run in mode_gpu right after the nvidia-uvm module is
+# loaded, only when nvrc.uvm.tools is true on the (measured) kernel command line. The node's
+# major number is dynamic, so a helper reads /proc/devices and mknods it.
+[Unit]
+Description=Create /dev/nvidia-uvm-tools (nvrc.uvm.tools)
+DefaultDependencies=no
+After=modprobe@nvidia-uvm.service nvsd-cmdline.service nvsd-mode.service
+ConditionPathExists=/run/nvsd/load.nvidia-uvm
+ConditionPathExists=/run/nvsd/uvm-tools
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper uvm-tools
+StandardOutput=null
+StandardError=null

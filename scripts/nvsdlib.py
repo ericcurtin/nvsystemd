@@ -31,7 +31,7 @@ def image_path(variant, fixture_name, compress):
     return os.path.join(OUT, "images", "%s-%s-%s.cpio%s" % (variant, fixture_name, compress, {"none": "", "zstd": ".zst", "zstd3": ".zst", "gzip": ".gz", "xz": ".xz"}[compress]))
 
 
-def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False):
+def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False, extra=None):
     """Build (or reuse) an image. fixture_text is the content of /etc/nvstub.conf."""
     os.makedirs(os.path.join(OUT, "images"), exist_ok=True)
     out = image_path(variant, fixture_name, compress)
@@ -40,6 +40,11 @@ def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3",
         f.write(fixture_text)
     args = [sys.executable, os.path.join(REPO, "scripts", "mkimage.py"), "--variant", variant, "--out", out,
             "--compress", compress, "--fixture-conf", conf]
+    for dest, text in (extra or {}).items():  # test-only files, e.g. systemd drop-ins
+        src = os.path.join(OUT, "images", "extra-%s-%s" % (fixture_name, dest.strip("/").replace("/", "_")))
+        with open(src, "w") as f:
+            f.write(text)
+        args += ["--extra", "%s=%s" % (dest, src)]
     if variant in ("nvrc", "probe"):
         args += ["--nvrc-bin", NVRC_BIN]
     env = dict(os.environ, NVSD_OUT=OUT)
@@ -127,8 +132,8 @@ class Report:
 
 
 def boot(variant, fixture_text="", fixture_name="zero", pci=(), append="", timeout=30, compress="zstd3", kernel=None,
-         image=None, out=None):
-    img = image or build_image(variant, fixture_text, fixture_name, compress)
+         image=None, out=None, extra=None):
+    img = image or build_image(variant, fixture_text, fixture_name, compress, extra=extra)
     r = vmrun.run(kernel or vmrun.DEFAULT_KERNEL, img, (vmrun.BASE_CMDLINE + " " + append).strip(), pci, timeout, out=out)
     rep = Report(r["lines"])
     rep.rc, rep.wall, rep.timed_out = r["rc"], r["wall"], r["timed_out"]

@@ -189,6 +189,8 @@ def main():
     ap.add_argument("--out", required=True)
     ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "zstd3", "gzip", "xz"])
     ap.add_argument("--nvrc-bin")
+    ap.add_argument("--extra", action="append", default=[], metavar="DEST=SRCFILE",
+                    help="test-only: add a file to the image (e.g. a systemd drop-in)")
     ap.add_argument("--fixture-conf", help="file for /etc/nvstub.conf (default: empty = zero latency)")
     a = ap.parse_args()
 
@@ -205,6 +207,15 @@ def main():
             sys.path.insert(0, os.path.join(REPO, "scripts"))
             import nvsd_overlay
             nvsd_overlay.apply(c, REPO, OUT)
+    for spec in a.extra:
+        dest, src = spec.split("=", 1)
+        parts = dest.strip("/").split("/")[:-1]
+        cur = ""
+        for part in parts:
+            cur += "/" + part
+            if cur.lstrip("/") not in c.seen:
+                c.dir(cur)
+        c.file(dest, read(src), 0o644)
     raw = a.out + ".raw"
     with open(raw, "wb") as f:
         c.write(f)

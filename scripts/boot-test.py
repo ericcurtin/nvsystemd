@@ -178,6 +178,23 @@ def u08_modprobe_units(variant, v):
 
 
 @test
+def u09_uvm_tools_node_is_created(variant, v):
+    """nvsd-uvm-tools.service creates /dev/nvidia-uvm-tools c <major>:1 mode 0666. The simulated modprobe cannot
+    register a char major, so a test-only drop-in points the helper at an existing driver name ("mem", major 1)."""
+    if variant != "nvsd":
+        return "skip: nvsd only"
+    dropin = "[Service]\nExecStart=\nExecStart=/usr/lib/nvsd/nvsd-helper uvm-tools mem\n"
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.uvm.tools=on", fixture_name="uvmtest",
+                 extra={"/etc/systemd/system/nvsd-uvm-tools.service.d/test.conf": dropin})
+    booted_agent(rep)
+    assert rep.facts["uvm_tools"] == "0021b6:1:1", rep.facts  # 0o20666 = char device, 0666
+    rep = L.boot(variant, pci=["gpu1"], append=ECHO, fixture_name="uvmtest",
+                 extra={"/etc/systemd/system/nvsd-uvm-tools.service.d/test.conf": dropin})
+    booted_agent(rep)
+    assert rep.facts["uvm_tools"] == "none", rep.facts
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

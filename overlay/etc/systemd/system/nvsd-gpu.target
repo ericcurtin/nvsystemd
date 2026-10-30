@@ -6,6 +6,6 @@
 [Unit]
 Description=NVRC mode: gpu
 DefaultDependencies=no
-Requires=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service modprobe@ib_umad.service modprobe@mlx5_ib.service
-After=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service modprobe@ib_umad.service modprobe@mlx5_ib.service
+Requires=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service modprobe@ib_umad.service modprobe@mlx5_ib.service
+After=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service modprobe@ib_umad.service modprobe@mlx5_ib.service
 ConditionPathExists=/run/nvsd/mode.gpu

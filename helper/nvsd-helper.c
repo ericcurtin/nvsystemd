@@ -384,6 +384,41 @@ static int cmd_lockdown(void) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ uvm-tools
+ * NVRC uvm.rs setup_uvm_tools(): mknod /dev/nvidia-uvm-tools c <nvidia-uvm major> 1, mode 0666.
+ * The major is dynamic (read from /proc/devices after the module loaded), so neither a
+ * static device unit nor systemd-tmpfiles (fixed numbers only) can create the node. The node
+ * is never replaced: an existing one is an error (NVRC: mknod EEXIST panics). */
+static int cmd_uvm_tools(int argc, char **argv) {
+	const char *drv = argc > 2 ? argv[2] : "nvidia-uvm"; /* optional name: used by the boot test only */
+	static char dev[16384];
+	if (read_file("/proc/devices", dev, sizeof(dev)) < 0) return die("uvm-tools", "cannot read /proc/devices");
+	/* NVRC device::character_major: only the "Character devices:" section counts */
+	const char *p = sfind(dev, "Character devices:");
+	if (!p) return die("uvm-tools", "nvidia-uvm character device major missing or invalid");
+	const char *blk = sfind(p, "Block devices:");
+	long major = -1;
+	p += slen("Character devices:");
+	while (*p) {
+		while (*p == '\n' || *p == ' ') p++;
+		if (blk && p >= blk) break;
+		u64 m = parse_u64_loose(p);
+		const char *q = p;
+		while (*q >= '0' && *q <= '9') q++;
+		if (q == p) { while (*p && *p != '\n') p++; continue; }
+		while (*q == ' ') q++;
+		const char *e = q;
+		while (*e && *e != '\n') e++;
+		if ((usize)(e - q) == slen(drv) && !memcmp(q, drv, slen(drv))) { major = (long)m; break; }
+		p = e;
+	}
+	if (major <= 0 || major > 4095) return die("uvm-tools", "nvidia-uvm character device major missing or invalid");
+	u32 devno = (u32)((major << 8) | 1); /* minor 1 = UVM_TOOLS_MINOR; major < 4096 fits the legacy encoding */
+	if (sys_mknod("/dev/nvidia-uvm-tools", 020000 | 0666, devno) < 0) return die("uvm-tools", "cannot create nvidia-uvm-tools");
+	if (sys_chmod("/dev/nvidia-uvm-tools", 0666) < 0) return die("uvm-tools", "cannot chmod nvidia-uvm-tools");
+	return 0;
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -392,6 +427,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
+	if (seq(sub, "uvm-tools")) return cmd_uvm_tools(argc, argv);
 	if (seq(sub, "syslog")) return cmd_syslog();
 	if (seq(sub, "wait-marker")) return cmd_wait_marker(argc, argv);
 	return die("main", "unknown subcommand");
