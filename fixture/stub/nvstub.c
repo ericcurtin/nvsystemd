@@ -682,6 +682,11 @@ static const char *env_get(const char *k) {
 
 static int do_kata(void) {
 	u64 t_start = boottime_us();
+	if (sys_getpid() == 1) { /* calibration image: the stub is the init, so mount what the report reads */
+		sys_mount("proc", "/proc", "proc", 0, NULL);
+		sys_mount("sysfs", "/sys", "sysfs", 0, NULL);
+		sys_mount("tmpfs", "/run", "tmpfs", 0, NULL);
+	}
 	long fd = sys_open("/dev/console", O_WRONLY | 0400 /* O_NOCTTY */, 0);
 	if (fd >= 0) out_fd = (int)fd;
 	log_event("kata-agent", "start", g_joined);
@@ -776,7 +781,7 @@ static int real_main(int argc, char **argv) {
 	if (seq(g_tool, "nvidia-ctk")) return do_ctk();
 	if (seq(g_tool, "nv-fabricmanager")) return do_fm();
 	if (seq(g_tool, "nvlsm")) return do_nvlsm();
-	if (seq(g_tool, "kata-agent")) return do_kata();
+	if (seq(g_tool, "kata-agent") || seq(g_tool, "init")) return do_kata(); /* "init": benchmark calibration image */
 	if (seq(g_tool, "ldconfig")) return do_ldconfig();
 	if (seq(g_tool, "veritysetup")) return do_veritysetup();
 	if (seq(g_tool, "mkext")) return do_mkext();

@@ -142,7 +142,7 @@ def add_base(c, latency_conf):
     c.file("/etc/ld.so.cache", b"")  # bind target for the gpu-extension loader cache (baked into real rootfs images)
 
 
-def add_systemd(c, with_nvsd):
+def add_systemd(c, with_nvsd, probe=False):
     """Fedora's stock systemd, unmodified, copied from the build host (never committed)."""
     sd = "/usr/lib/systemd/systemd"
     execu = "/usr/lib/systemd/systemd-executor"
@@ -169,7 +169,10 @@ def add_systemd(c, with_nvsd):
         if d not in ("/usr/lib64", "/usr/lib") and ("/" + d.strip("/")).lstrip("/") not in c.seen:
             c.dir(d)
         c.file(target, read(real), 0o755)
-    c.symlink("/init", "usr/lib/systemd/systemd")
+    if probe:
+        c.file("/init", read(os.path.join(OUT, "nvstub")), 0o755)
+    else:
+        c.symlink("/init", "usr/lib/systemd/systemd")
 
 
 def compress(raw, out, how):
@@ -195,6 +198,9 @@ def main():
     ap.add_argument("--nvrc-bin")
     ap.add_argument("--extra", action="append", default=[], metavar="DEST=SRCFILE",
                     help="test-only: add a file to the image (e.g. a systemd drop-in)")
+    ap.add_argument("--probe", action="store_true",
+                    help="benchmark calibration: same image contents, but /init is the kata-agent stub, so the "
+                         "PID 1 CPU time of the kernel's own init thread (initramfs unpack, initcalls) can be measured")
     ap.add_argument("--fixture-conf", help="file for /etc/nvstub.conf (default: empty = zero latency)")
     a = ap.parse_args()
 
@@ -204,9 +210,9 @@ def main():
     if a.variant == "nvrc":
         if not a.nvrc_bin:
             sys.exit("--nvrc-bin required")
-        c.file("/init", read(a.nvrc_bin), 0o755)
+        c.file("/init", read(a.probe and os.path.join(OUT, "nvstub") or a.nvrc_bin), 0o755)
     else:
-        add_systemd(c, a.variant == "nvsd")
+        add_systemd(c, a.variant == "nvsd", a.probe)
         if a.variant == "nvsd":
             sys.path.insert(0, os.path.join(REPO, "scripts"))
             import nvsd_overlay

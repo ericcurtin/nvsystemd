@@ -32,9 +32,12 @@ def image_path(variant, fixture_name, compress):
 
 
 def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False, extra=None):
-    """Build (or reuse) an image. fixture_text is the content of /etc/nvstub.conf."""
+    """Build (or reuse) an image. fixture_text is the content of /etc/nvstub.conf. A variant name ending in
+    -probe builds the calibration image (same contents, /init = kata-agent stub)."""
+    probe = variant.endswith("-probe")
+    variant = variant[:-6] if probe else variant
     os.makedirs(os.path.join(OUT, "images"), exist_ok=True)
-    out = image_path(variant, fixture_name, compress)
+    out = image_path(variant + ("-probe" if probe else ""), fixture_name, compress)
     conf = os.path.join(OUT, "images", "fixture-%s.conf" % fixture_name)
     with open(conf, "w") as f:
         f.write(fixture_text)
@@ -45,6 +48,8 @@ def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3",
         with open(src, "w") as f:
             f.write(text)
         args += ["--extra", "%s=%s" % (dest, src)]
+    if probe:
+        args += ["--probe"]
     if variant in ("nvrc", "probe"):
         args += ["--nvrc-bin", NVRC_BIN]
     env = dict(os.environ, NVSD_OUT=OUT)
