@@ -234,6 +234,33 @@ def u11_smi_units(variant, v):
 
 
 @test
+def u12_nvl5_flow_with_fake_infiniband(variant, v):
+    """servicevm-nvl5 happy path: modules, port GUID (first SM-enabled device by name), nvlsm before the fabric
+    manager, symmetric rail policy. sysfs is read-only, so a test-only drop-in points ib-guid at a fixture tree
+    in which mlx5_0 has the SM disabled (cap_mask bit 10) and must be skipped."""
+    if variant != "nvsd":
+        return "skip: nvsd only"
+    base = "/usr/share/nvsd-test/infiniband/"
+    extra = {
+        "/etc/systemd/system/nvsd-ib-guid.service.d/test.conf":
+            "[Service]\nExecStart=\nExecStart=/usr/lib/nvsd/nvsd-helper ib-guid /usr/share/nvsd-test/infiniband\n",
+        base + "mlx5_0/ports/1/cap_mask": "0x00000400\n",
+        base + "mlx5_0/ports/1/gids/0": "fe80:0000:0000:0000:0002:c903:0029:7de1\n",
+        base + "mlx5_1/ports/1/cap_mask": "0x00000200\n",
+        base + "mlx5_1/ports/1/gids/0": "fe80:0000:0000:0000:0002:c903:0029:7de2\n",
+    }
+    rep = L.boot(variant, pci=["nvl5"], append=ECHO, fixture_name="ib", extra=extra)
+    common_agent_checks(rep)
+    assert seq_names(rep) == ["modprobe start", "modprobe done", "modprobe start", "modprobe done", "nvlsm start",
+                              "nvlsm ready", "nv-fabricmanager start", "nv-fabricmanager ready",
+                              "kata-agent start"], seq_names(rep)
+    assert argv_of(rep, "nvlsm") == "-F /usr/share/nvidia/nvlsm/nvlsm.conf -g 0x0002c90300297de2 -f stdout"
+    assert argv_of(rep, "nv-fabricmanager") == ("-c /run/fabricmanager.cfg -g 0x0002c90300297de2 FABRIC_MODE=1 "
+                                                "PARTITION_RAIL_POLICY=symmetric cfg_mode=0100")
+    assert_before(rep, ("nvlsm", "start"), ("nv-fabricmanager", "start"))
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

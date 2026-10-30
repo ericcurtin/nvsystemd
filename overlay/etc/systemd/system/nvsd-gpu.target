@@ -6,6 +6,6 @@
 [Unit]
 Description=NVRC mode: gpu
 DefaultDependencies=no
-Requires=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service
-After=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service
+Requires=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
+After=nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvidia-persistenced.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nvidia-smi-srs.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service modprobe@ib_umad.service modprobe@mlx5_ib.service nv-fabricmanager.service nvsd-ib-guid.service nvlsm.service
 ConditionPathExists=/run/nvsd/mode.gpu

@@ -466,6 +466,78 @@ static int cmd_fm_config(int argc, char **argv) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ ib-guid
+ * NVRC infiniband.rs detect_port_guid(): after mlx5_ib is loaded, pick the first (by name) device in
+ * /sys/class/infiniband whose port 1 has the subnet manager enabled (cap_mask bit 10 clear) and
+ * whose gids/0 holds eight groups; the port GUID is the last four groups, "0x"-prefixed. No GUID,
+ * a missing or an empty class directory are fatal (NVRC panics). The result goes to
+ * /run/nvsd/port-guid.env for nvlsm and nv-fabricmanager:
+ *   NVSD_GUID=0x0002c90300297de1       NVSD_FM_GUID_ARGS=-g 0x0002c90300297de1
+ * Reading and sorting sysfs text is something no systemd directive does.
+ *   ib-guid [CLASS_DIR]     (the optional directory exists for the boot test) */
+static int cmd_ib_guid(int argc, char **argv) {
+	const char *root = argc > 2 ? argv[2] : "/sys/class/infiniband";
+	struct dirit d;
+	if (dir_open(&d, root) < 0) return die("ib-guid", "/sys/class/infiniband not found - mlx5_ib module not loaded");
+	static char names[32][64];
+	int n = 0;
+	const char *e;
+	while ((e = dir_next(&d)) && n < 32) {
+		usize l = slen(e);
+		if (l >= 64) continue;
+		memcpy(names[n++], e, l + 1);
+	}
+	dir_close(&d);
+	if (n == 0) return die("ib-guid", "/sys/class/infiniband is empty - mlx5_ib loaded but no IB devices registered");
+	for (int i = 1; i < n; i++) { /* sort by name: mlx5_0 before mlx5_1 */
+		char t[64];
+		int j = i;
+		memcpy(t, names[i], 64);
+		while (j > 0 && memcmp(names[j - 1], t, 64) > 0) { memcpy(names[j], names[j - 1], 64); j--; }
+		memcpy(names[j], t, 64);
+	}
+	for (int i = 0; i < n; i++) {
+		char p[400], v[128];
+		char sub[100];
+		struct buf sb = BUF_INIT(sub);
+		b_str(&sb, names[i]); b_str(&sb, "/ports/1/cap_mask"); b_term(&sb);
+		path_join3(p, sizeof(p), root, sub, NULL);
+		if (read_file(p, v, sizeof(v)) < 0) continue;
+		rtrim(v);
+		const char *h = v;
+		if (h[0] == '0' && (h[1] == 'x' || h[1] == 'X')) h += 2;
+		u32 mask = 0;
+		for (; *h; h++) {
+			int dgt = (*h >= '0' && *h <= '9') ? *h - '0' : (*h >= 'a' && *h <= 'f') ? *h - 'a' + 10 : (*h >= 'A' && *h <= 'F') ? *h - 'A' + 10 : -1;
+			if (dgt < 0) { mask = 0; break; }
+			mask = mask * 16 + (u32)dgt;
+		}
+		if (mask & (1u << 10)) continue; /* SM disabled */
+		sb.len = 0;
+		b_str(&sb, names[i]); b_str(&sb, "/ports/1/gids/0"); b_term(&sb);
+		path_join3(p, sizeof(p), root, sub, NULL);
+		if (read_file(p, v, sizeof(v)) < 0) continue;
+		rtrim(v);
+		/* exactly eight ':'-separated groups */
+		int groups = 1;
+		const char *g[8];
+		g[0] = v;
+		for (char *q = v; *q; q++)
+			if (*q == ':') { *q = 0; if (groups < 8) g[groups] = q + 1; groups++; }
+		if (groups != 8) continue;
+		char guid[80];
+		struct buf gb = BUF_INIT(guid);
+		b_str(&gb, "0x"); b_str(&gb, g[4]); b_str(&gb, g[5]); b_str(&gb, g[6]); b_str(&gb, g[7]); b_term(&gb);
+		char env[300];
+		struct buf eb = BUF_INIT(env);
+		b_str(&eb, "NVSD_GUID="); b_str(&eb, guid); b_str(&eb, "\nNVSD_FM_GUID_ARGS=-g "); b_str(&eb, guid); b_char(&eb, '\n'); b_term(&eb);
+		ensure_run_dir();
+		if (put("port-guid.env", env, 0644) < 0) return die("ib-guid", "cannot write port-guid.env");
+		return 0;
+	}
+	return die("ib-guid", "nvl5 requires SW_MNG IB device with valid port GUID");
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -474,6 +546,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
+	if (seq(sub, "ib-guid")) return cmd_ib_guid(argc, argv);
 	if (seq(sub, "fm-config")) return cmd_fm_config(argc, argv);
 	if (seq(sub, "uvm-tools")) return cmd_uvm_tools(argc, argv);
 	if (seq(sub, "syslog")) return cmd_syslog();

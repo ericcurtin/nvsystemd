@@ -1,0 +1,22 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: daemon.rs nv_nvlsm(): `nvlsm -F <nvlsm.conf> -g <port GUID> -f stdout`, a foreground
+# daemon that must initialise the NVLink subnet before the fabric manager manages the fabric.
+# NVRC does not wait for it to become ready (and neither does this unit: Type=exec is "started"
+# once the binary is running); it is ordered before nv-fabricmanager.service. An exit at any
+# time powers the VM off.
+[Unit]
+Description=nvlsm (NVLink subnet manager)
+DefaultDependencies=no
+After=nvsd-ib-guid.service nvsd-mode.service
+ConditionPathExists=/run/nvsd/nvl5
+FailureAction=poweroff-immediate
+
+[Service]
+Type=exec
+EnvironmentFile=/run/nvsd/port-guid.env
+EnvironmentFile=-/run/nvsd/gpu-ext.env
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/sbin:/sbin:/usr/bin:/bin
+ExecStart=nvlsm -F ${NVSD_GPU_ROOT}/usr/share/nvidia/nvlsm/nvlsm.conf -g ${NVSD_GUID} -f stdout
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

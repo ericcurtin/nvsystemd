@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: infiniband.rs detect_port_guid(), main.rs mode_nvl5(): after ib_umad and mlx5_ib are loaded,
+# find the CX7 bridge port GUID that nvlsm and the fabric manager need. Fails (VM powers off)
+# when the infiniband class is missing/empty or no SM-enabled port has a GUID.
+[Unit]
+Description=Detect the CX7 port GUID (NVL5)
+DefaultDependencies=no
+After=modprobe@ib_umad.service modprobe@mlx5_ib.service nvsd-mode.service
+ConditionPathExists=/run/nvsd/nvl5
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper ib-guid
+StandardOutput=null
+StandardError=null
