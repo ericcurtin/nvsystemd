@@ -205,12 +205,89 @@ static int cmd_hash(int argc, char **argv) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ syslog / wait-marker
+ * NVRC syslog.rs + kmsg.rs wait_for_marker_after(): NVRC binds /dev/log itself, drains it into
+ * /run/syslog.log and blocks until a daemon logs a readiness marker ("Local RPC services
+ * initialized" for nvidia-persistenced, "FM starting NvLink Inband" for the fabric manager).
+ * systemd has no syslog sink without journald, and no "wait for this text" primitive.
+ *
+ *   syslog                 run by nvsd-syslog.service; the socket /dev/log is owned by
+ *                          nvsd-syslog.socket and arrives as fd 3 (LISTEN_FDS), so datagrams
+ *                          sent before this process exists are not lost.
+ *   wait-marker TEXT SECS  run as ExecStartPost= of a daemon unit; returns 0 once TEXT is in
+ *                          /run/syslog.log (the whole file is scanned first, so a marker that
+ *                          arrived early is never missed), 1 on timeout. inotify, no polling.
+ */
+#define SYSLOG_FILE "/run/syslog.log"
+
+static int cmd_syslog(void) {
+	static char m[8192];
+	for (;;) {
+		long n = sys_read(3, m, sizeof(m) - 2);
+		if (n == -EINTR) continue;
+		if (n < 0) return die("syslog", "read from /dev/log socket failed");
+		/* strip the "<pri>" prefix (NVRC strip_priority) and make it a line */
+		char *p = m;
+		if (n > 0 && *p == '<') { char *q = p; while (q < m + n && *q != '>') q++; if (q < m + n) p = q + 1; }
+		usize len = (usize)(m + n - p);
+		while (len && (p[len - 1] == '\n' || p[len - 1] == '\0')) len--;
+		p[len++] = '\n';
+		if (append_file(SYSLOG_FILE, p, len, 0600) < 0) return die("syslog", "cannot append to " SYSLOG_FILE);
+	}
+}
+
+static int file_has(const char *path, const char *needle, usize nl) {
+	static char buf[65536];
+	long fd = sys_open(path, O_RDONLY | O_CLOEXEC, 0);
+	if (fd < 0) return 0;
+	int hit = 0;
+	usize have = 0;
+	for (;;) {
+		long r = sys_read((int)fd, buf + have, sizeof(buf) - 1 - have);
+		if (r == -EINTR) continue;
+		if (r <= 0) break;
+		have += (usize)r;
+		buf[have] = 0;
+		if (sfind(buf, needle)) { hit = 1; break; }
+		/* keep a tail that could hold the start of a marker split across reads */
+		if (have > nl) { memmove(buf, buf + have - nl, nl); have = nl; }
+	}
+	sys_close((int)fd);
+	return hit;
+}
+
+static int cmd_wait_marker(int argc, char **argv) {
+	if (argc != 4) return die("wait-marker", "usage: wait-marker TEXT SECONDS");
+	const char *text = argv[2];
+	u32 secs;
+	if (!parse_u32(argv[3], &secs)) return die("wait-marker", "bad timeout");
+	usize nl = slen(text);
+	/* the file may not exist yet: create it so inotify has something to watch (NVRC open_kmsg) */
+	write_file(SYSLOG_FILE, "", 0, O_CREAT, 0600);
+	long in = sc1(SYS_inotify_init1, O_CLOEXEC);
+	if (in < 0) return die("wait-marker", "inotify_init1 failed");
+	/* IN_MODIFY | IN_CLOSE_WRITE */
+	if (sc3(SYS_inotify_add_watch, in, (long)SYSLOG_FILE, 0x2 | 0x8) < 0) return die("wait-marker", "inotify_add_watch failed");
+	struct timespec_ t0, t;
+	sys_clock(CLOCK_MONOTONIC, &t0);
+	for (;;) {
+		if (file_has(SYSLOG_FILE, text, nl)) return 0;
+		sys_clock(CLOCK_MONOTONIC, &t);
+		i64 left = (i64)secs * 1000 - ((t.sec - t0.sec) * 1000 + (t.nsec - t0.nsec) / 1000000);
+		if (left <= 0) return die("wait-marker", "timeout waiting for marker");
+		long r = sys_poll_fd((int)in, 1, left > 500 ? 500 : (int)left);
+		if (r > 0) { char ev[512]; sys_read((int)in, ev, sizeof(ev)); }
+	}
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
 	const char *sub = argv[1];
 	if (seq(sub, "cmdline")) return cmd_cmdline();
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
+	if (seq(sub, "syslog")) return cmd_syslog();
+	if (seq(sub, "wait-marker")) return cmd_wait_marker(argc, argv);
 	return die("main", "unknown subcommand");
 }
 

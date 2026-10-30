@@ -28,10 +28,10 @@ def build_tools():
 
 
 def image_path(variant, fixture_name, compress):
-    return os.path.join(OUT, "images", "%s-%s.cpio%s" % (variant, fixture_name, {"none": "", "zstd": ".zst", "gzip": ".gz", "xz": ".xz"}[compress]))
+    return os.path.join(OUT, "images", "%s-%s-%s.cpio%s" % (variant, fixture_name, compress, {"none": "", "zstd": ".zst", "zstd3": ".zst", "gzip": ".gz", "xz": ".xz"}[compress]))
 
 
-def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd", force=False):
+def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False):
     """Build (or reuse) an image. fixture_text is the content of /etc/nvstub.conf."""
     os.makedirs(os.path.join(OUT, "images"), exist_ok=True)
     out = image_path(variant, fixture_name, compress)
@@ -126,7 +126,7 @@ class Report:
         return any("reboot: Power down" in ln or "Power down" in ln for _t, ln in self.raw)
 
 
-def boot(variant, fixture_text="", fixture_name="zero", pci=(), append="", timeout=30, compress="zstd", kernel=None,
+def boot(variant, fixture_text="", fixture_name="zero", pci=(), append="", timeout=30, compress="zstd3", kernel=None,
          image=None, out=None):
     img = image or build_image(variant, fixture_text, fixture_name, compress)
     r = vmrun.run(kernel or vmrun.DEFAULT_KERNEL, img, (vmrun.BASE_CMDLINE + " " + append).strip(), pci, timeout, out=out)

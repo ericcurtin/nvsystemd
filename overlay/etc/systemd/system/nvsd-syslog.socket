@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: syslog.rs poll() binds a datagram socket at /dev/log so daemons (nvidia-persistenced,
+# nv-fabricmanager) can log, and kmsg.rs wait_for_marker() reads the result. Without journald
+# nothing else owns /dev/log, so this socket unit does. Owned by systemd from the first
+# millisecond: datagrams sent before the sink process exists wait in the socket buffer.
+[Unit]
+Description=/dev/log (NVRC syslog sink)
+DefaultDependencies=no
+
+[Socket]
+ListenDatagram=/dev/log
+SocketMode=0666
+Service=nvsd-syslog.service

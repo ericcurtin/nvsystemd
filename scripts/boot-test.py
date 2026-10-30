@@ -142,6 +142,14 @@ def t05_init_digest_logged_only_when_logging(variant, v):
 
 
 @test
+def t06_dev_log_socket_exists(variant, v):
+    """syslog.rs: /dev/log is bound before anything else runs (nvsystemd: nvsd-syslog.socket)."""
+    rep = L.boot(variant)
+    booted_agent(rep)
+    assert rep.facts["dev_log"] == "1", rep.facts
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

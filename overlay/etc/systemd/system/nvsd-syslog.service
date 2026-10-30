@@ -1,0 +1,16 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: syslog.rs (drain /dev/log into /run/syslog.log) and the syslog_loop child that NVRC
+# keeps alive next to kata-agent. Socket activated: in cpu mode, where nothing logs, it never
+# runs. Not part of the fail-fast path: a drain error ends this unit, it must not power the VM
+# off (NVRC uses try_poll() for exactly that reason once kata-agent runs).
+[Unit]
+Description=Drain /dev/log into /run/syslog.log
+DefaultDependencies=no
+Requires=nvsd-syslog.socket
+After=nvsd-syslog.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/nvsd/nvsd-helper syslog
+StandardOutput=null
+StandardError=null

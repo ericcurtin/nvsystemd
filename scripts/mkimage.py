@@ -173,6 +173,7 @@ def compress(raw, out, how):
         os.replace(raw, out)
         return
     cmd = {"zstd": ["zstd", "-q", "-19", "-T0", "-f", "-o", out, raw],
+           "zstd3": ["zstd", "-q", "-3", "-T0", "-f", "-o", out, raw],
            "gzip": ["sh", "-c", "gzip -9 -n < %s > %s" % (raw, out)],
            "xz": ["xz", "-q", "--check=crc32", "-9", "-T1", "-c", raw]}[how]
     if how == "xz":
@@ -186,7 +187,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", required=True, choices=["nvrc", "nvsd", "systemd-only"])
     ap.add_argument("--out", required=True)
-    ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "gzip", "xz"])
+    ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "zstd3", "gzip", "xz"])
     ap.add_argument("--nvrc-bin")
     ap.add_argument("--fixture-conf", help="file for /etc/nvstub.conf (default: empty = zero latency)")
     a = ap.parse_args()
