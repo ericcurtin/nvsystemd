@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC main(): the prologue (mount::setup, net::loopback_up, kernlog_setup, syslog, kernel
+# params, ...). Everything else is ordered after this target; units are added to it as
+# they are introduced. Loopback is brought up by systemd itself at startup.
+[Unit]
+Description=nvsystemd base (mounts, kernel parameters)
+DefaultDependencies=no
+Wants=tmp.mount sys-kernel-config.mount
+After=tmp.mount sys-kernel-config.mount

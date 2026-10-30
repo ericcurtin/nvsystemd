@@ -5,6 +5,7 @@
 [Unit]
 Description=kata-agent (VM lifetime process)
 DefaultDependencies=no
+After=nvsd-base.target
 SuccessAction=poweroff-immediate
 FailureAction=poweroff-immediate
 

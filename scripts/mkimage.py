@@ -49,6 +49,8 @@ BASE_LINKS = {"/bin": "usr/bin", "/sbin": "usr/sbin", "/lib": "usr/lib", "/lib64
 BASE_DIRS.remove("/lib/firmware/nvidia")
 BASE_DIRS += ["/usr/lib/firmware", "/usr/lib/firmware/nvidia"]
 DLOPEN_LIBS = ["/lib64/libmount.so.1"]
+# systemd's .mount units fork /usr/bin/mount (util-linux), they do not call mount(2) themselves.
+EXTRA_BINS = ["/usr/bin/mount"]
 DEV_NODES = {"/dev/console": (5, 1), "/dev/null": (1, 3), "/dev/kmsg": (1, 11), "/dev/zero": (1, 5)}
 
 
@@ -146,6 +148,9 @@ def add_systemd(c, with_nvsd):
     libs = set(ldd_libs(sd)) | set(ldd_libs(execu))
     # systemd dlopen()s libmount from mount_option_mangle(); without it even the early
     # API filesystem mounts fail ("Failed to mount early API filesystems").
+    for b in EXTRA_BINS:
+        c.file(b, read(b), 0o755)  # no setuid bit: we are root anyway
+        libs |= set(ldd_libs(b))
     for extra in DLOPEN_LIBS:
         libs.add(extra)
         libs |= set(ldd_libs(extra))

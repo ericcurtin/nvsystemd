@@ -1,3 +1,4 @@
 # tests (by id prefix) that nvsystemd must pass at this commit
 t00
+t01
 t02

@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: mount.rs mount_optional(): configfs on /sys/kernel/config, only if the kernel has it.
+# (securityfs on /sys/kernel/security is part of systemd's built-in mount table.)
+[Unit]
+Description=Kernel configuration file system
+DefaultDependencies=no
+ConditionPathExists=/sys/kernel/config
+
+[Mount]
+What=configfs
+Where=/sys/kernel/config
+Type=configfs
+Options=nosuid,nodev,noexec,relatime
