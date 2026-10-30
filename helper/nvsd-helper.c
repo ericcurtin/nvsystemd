@@ -280,12 +280,105 @@ static int cmd_wait_marker(int argc, char **argv) {
 	}
 }
 
+/* ------------------------------------------------------------------ detect
+ * Replaces NVRC mode.rs detect() (+ the single-GPU test in modprobe.rs). Scans
+ * /sys/bus/pci/devices exactly like NVRC (NVIDIA vendor 0x10de: class 0x0680 = NVSwitch,
+ * 0x03xx = GPU; Mellanox 0x15b3 with "SW_MNG" in the PCI VPD = NVLink management NIC),
+ * applies the same (switches, gpus, sw_mng) decision table, and records the result as
+ * marker files that unit conditions test (systemd cannot look inside sysfs files):
+ *
+ *   mode.cpu | mode.gpu | mode.servicevm-nvl4 | mode.servicevm-nvl5   the NVRC mode
+ *   load.nvidia  load.nvidia-uvm   modules NVRC's mode function would modprobe
+ *   nvl5                           ib_umad/mlx5_ib/port GUID/nvlsm are needed
+ *   fm  + fm.env                   fabric manager runs; NVSD_FM_MODE / NVSD_FM_POLICY
+ *   modprobe-nvidia.env            NVSD_PARAMS=NVreg_NvLinkDisable=1 iff exactly one GPU
+ *
+ * An unmatched topology is NVRC's "unexpected topology" panic: fail fast.
+ */
+static int vpd_has_sw_mng(const char *dev) {
+	static char v[65536];
+	char p[300];
+	path_join3(p, sizeof(p), "/sys/bus/pci/devices", dev, "vpd");
+	long fd = sys_open(p, O_RDONLY | O_CLOEXEC, 0);
+	if (fd < 0) return 0;
+	usize n = 0;
+	for (;;) {
+		long r = sys_read((int)fd, v + n, sizeof(v) - n);
+		if (r == -EINTR) continue;
+		if (r <= 0) break;
+		n += (usize)r;
+		if (n >= sizeof(v)) break;
+	}
+	sys_close((int)fd);
+	for (usize i = 0; i + 6 <= n; i++)
+		if (!memcmp(v + i, "SW_MNG", 6)) return 1;
+	return 0;
+}
+
+static int count_sw_mng(void) {
+	struct dirit d;
+	int n = 0;
+	if (dir_open(&d, "/sys/bus/pci/devices") < 0) return 0;
+	const char *name;
+	while ((name = dir_next(&d))) {
+		char p[300], v[64];
+		path_join3(p, sizeof(p), "/sys/bus/pci/devices", name, "vendor");
+		if (read_file(p, v, sizeof(v)) < 0) continue;
+		rtrim(v);
+		if (seq(v, "0x15b3") && vpd_has_sw_mng(name)) n++;
+	}
+	dir_close(&d);
+	return n;
+}
+
+static int cmd_detect(void) {
+	const char *PCI = "/sys/bus/pci/devices";
+	int sw = pci_count(PCI, "0x10de", "0x0680");
+	int gpus = pci_count(PCI, "0x10de", "0x03");
+	int mng = count_sw_mng();
+	const char *mode, *nvswitch = NULL;
+	if (sw == 0 && gpus == 0 && mng == 0) mode = "cpu";
+	else if (sw == 0 && mng == 0) mode = "gpu";
+	else if (sw == 4 && gpus == 8 && mng == 0) { mode = "gpu"; nvswitch = "nvl4"; }
+	else if (sw == 4 && gpus == 0 && mng == 0) { mode = "servicevm-nvl4"; nvswitch = "nvl4"; }
+	else if (sw == 0 && gpus == 8 && mng == 4) { mode = "gpu"; nvswitch = "nvl5"; }
+	else if (sw == 0 && gpus == 0 && mng == 4) { mode = "servicevm-nvl5"; nvswitch = "nvl5"; }
+	else {
+		char m[200];
+		struct buf b = BUF_INIT(m);
+		b_str(&b, "unexpected topology: "); b_u64(&b, (u64)sw); b_str(&b, " NVSWITCH, "); b_u64(&b, (u64)gpus);
+		b_str(&b, " GPU, "); b_u64(&b, (u64)mng); b_str(&b, " PCI_SW_MNG - cannot determine mode"); b_term(&b);
+		return die("detect", m);
+	}
+	ensure_run_dir();
+	char f[64];
+	struct buf b = BUF_INIT(f);
+	b_str(&b, "mode."); b_str(&b, mode); b_term(&b);
+	put(f, "", 0644);
+	int svc = mode[0] == 's';
+	int is_gpu = seq(mode, "gpu");
+	if (is_gpu || seq(mode, "servicevm-nvl4")) put("load.nvidia", "", 0644);
+	if (is_gpu) put("load.nvidia-uvm", "", 0644);
+	if (nvswitch) {
+		int nvl5 = seq(nvswitch, "nvl5");
+		if (nvl5) put("nvl5", "", 0644);
+		put("fm", "", 0644);
+		/* FABRIC_MODE_SHARED (1) for the service VMs, FABRIC_MODE_FULL (0) for gpu mode;
+		 * NVL4 uses "greedy", NVL5 "symmetric" (required for CC on Blackwell) */
+		put("fm.env", svc ? (nvl5 ? "NVSD_FM_MODE=1\nNVSD_FM_POLICY=symmetric\n" : "NVSD_FM_MODE=1\nNVSD_FM_POLICY=greedy\n")
+				  : (nvl5 ? "NVSD_FM_MODE=0\nNVSD_FM_POLICY=symmetric\n" : "NVSD_FM_MODE=0\nNVSD_FM_POLICY=greedy\n"), 0644);
+	}
+	if (gpus == 1) put("modprobe-nvidia.env", "NVSD_PARAMS=NVreg_NvLinkDisable=1\n", 0644);
+	return 0;
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
 	const char *sub = argv[1];
 	if (seq(sub, "cmdline")) return cmd_cmdline();
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
+	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "syslog")) return cmd_syslog();
 	if (seq(sub, "wait-marker")) return cmd_wait_marker(argc, argv);
 	return die("main", "unknown subcommand");

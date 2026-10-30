@@ -150,6 +150,21 @@ def t06_dev_log_socket_exists(variant, v):
 
 
 @test
+def u07_mode_targets_selected_from_topology(variant, v):
+    """nvsd-mode.service + mode targets (nvsystemd only): exactly the target of the detected mode is reached."""
+    if variant != "nvsd":
+        return "skip: nvsd only"
+    want = {"cpu": ("none", "nvsd-cpu.target"), "gpu": ("gpu1", "nvsd-gpu.target"),
+            "nvl4": ("nvl4", "nvsd-servicevm-nvl4.target"), "gpu8-nvl4": ("gpu8-nvl4", "nvsd-gpu.target")}
+    allt = ("nvsd-cpu.target", "nvsd-gpu.target", "nvsd-servicevm-nvl4.target", "nvsd-servicevm-nvl5.target")
+    for name, (pci, tgt) in want.items():
+        pcis = [] if pci == "none" else [pci]
+        rep = L.boot(variant, pci=pcis, append="systemd.show_status=yes")
+        for t in allt:
+            assert (("Reached target " + t) in rep.text) == (t == tgt), (name, t, rep.text[-1500:])
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

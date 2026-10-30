@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: mode.rs detect() (PCI topology -> cpu | gpu | servicevm-nvl4 | servicevm-nvl5, plus the
+# NVSwitch generation and single-GPU facts modprobe.rs needs). systemd cannot look inside sysfs
+# files, so the helper reads /sys/bus/pci/devices and drops marker files in /run/nvsd that
+# the per-mode units test with ConditionPathExists=. An unmatched topology is NVRC's
+# "unexpected topology" panic: this unit fails and the VM powers off.
+[Unit]
+Description=Detect NVIDIA topology (NVRC mode)
+DefaultDependencies=no
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/nvsd/nvsd-helper detect
+StandardOutput=null
+StandardError=null

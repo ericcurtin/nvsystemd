@@ -5,7 +5,7 @@
 [Unit]
 Description=nvsystemd boot (NVRC replacement)
 DefaultDependencies=no
-Wants=nvsd-base.target
+Wants=nvsd-base.target nvsd-cpu.target nvsd-gpu.target nvsd-servicevm-nvl4.target nvsd-servicevm-nvl5.target
 Requires=kata-agent.service
 After=kata-agent.service
 FailureAction=poweroff-immediate

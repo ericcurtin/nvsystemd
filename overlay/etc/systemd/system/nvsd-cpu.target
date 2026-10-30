@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC main.rs: the "cpu" arm of the mode match. Reached only when nvsd-mode.service
+# detected that mode (marker /run/nvsd/mode.cpu); units of the mode are pulled in by
+# Wants= below and each carries the same condition, because systemd adds Wants= dependencies
+# to the transaction before conditions are evaluated.
+[Unit]
+Description=NVRC mode: cpu
+DefaultDependencies=no
+Requires=nvsd-mode.service
+After=nvsd-mode.service
+ConditionPathExists=/run/nvsd/mode.cpu
