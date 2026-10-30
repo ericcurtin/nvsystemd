@@ -685,7 +685,8 @@ static const char *env_get(const char *k) {
 
 static int do_kata(void) {
 	u64 t_start = boottime_us();
-	if (sys_getpid() == 1) { /* calibration image: the stub is the init, so mount what the report reads */
+	if (sys_getpid() == 1 && !exists("/proc/1")) { /* calibration image: the stub is the init, so mount what the report reads
+							 * (never when NVRC execed us: its mounts must stay untouched) */
 		sys_mount("proc", "/proc", "proc", 0, NULL);
 		sys_mount("sysfs", "/sys", "sysfs", 0, NULL);
 		sys_mount("tmpfs", "/run", "tmpfs", 0, NULL);
