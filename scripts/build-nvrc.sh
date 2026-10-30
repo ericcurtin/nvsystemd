@@ -5,12 +5,12 @@
 # plain cc against the toolchain's self-contained musl crt/libc, so the linker is
 # overridden through the environment instead of editing NVRC's .cargo/config.toml.
 #
-#   NVRC_SRC   source tree (default /tmp/nvsd/nvrc)
-#   NVSD_OUT   output root (default /tmp/nvsd-work); cargo target dir is $NVSD_OUT/target
+#   NVRC_SRC   source tree (default /home/ecurtin/nvsd-work/nvrc)
+#   NVSD_OUT   output root (default /home/ecurtin/nvsd-work); cargo target dir is $NVSD_OUT/target
 set -eu
 export PATH=$HOME/.cargo/bin:/usr/bin:$PATH
-NVRC_SRC=${NVRC_SRC:-/tmp/nvsd/nvrc}
-ROOT=${NVSD_WORK:-/tmp/nvsd-work}
+NVRC_SRC=${NVRC_SRC:-/home/ecurtin/nvsd-work/nvrc}
+ROOT=${NVSD_WORK:-/home/ecurtin/nvsd-work}
 cd "$NVRC_SRC"
 rustup target add x86_64-unknown-linux-musl >/dev/null 2>&1 || true
 CARGO_TARGET_DIR=$ROOT/target \

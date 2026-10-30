@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: Apache-2.0
-# nvsystemd top-level Makefile. Build products go to $(OUT) (default /tmp/nvsd-work/out), never into the repo.
-OUT ?= /tmp/nvsd-work/out
+# nvsystemd top-level Makefile. Build products go to $(OUT) (default /home/ecurtin/nvsd-work/out), never into the repo.
+OUT ?= /home/ecurtin/nvsd-work/out
 CC  ?= gcc
 CFLAGS_FREESTANDING = -static -nostdlib -ffreestanding -fno-builtin -fno-stack-protector -fno-pie -no-pie \
 	-fno-asynchronous-unwind-tables -fno-unwind-tables -fno-tree-loop-distribute-patterns \

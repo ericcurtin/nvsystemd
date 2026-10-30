@@ -21,7 +21,7 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.environ.get("NVSD_OUT", "/tmp/nvsd-work/out")
+OUT = os.environ.get("NVSD_OUT", "/home/ecurtin/nvsd-work/out")
 
 STUB_NAMES = {
     "/usr/sbin/modprobe": "modprobe",

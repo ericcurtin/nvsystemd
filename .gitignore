@@ -1,4 +1,4 @@
-# Build products live outside the repo (NVSD_OUT, default /tmp/nvsd-work/out).
+# Build products live outside the repo (NVSD_OUT, default /home/ecurtin/nvsd-work/out).
 # These patterns are a safety net: never commit kernels, images, binaries or rpm contents.
 /out/
 /target/

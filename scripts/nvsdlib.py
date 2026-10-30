@@ -7,8 +7,8 @@ import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUT = os.environ.get("NVSD_OUT", "/tmp/nvsd-work/out")
-NVRC_BIN = os.environ.get("NVRC_BIN", "/tmp/nvsd-work/target/x86_64-unknown-linux-musl/release/NVRC")
+OUT = os.environ.get("NVSD_OUT", "/home/ecurtin/nvsd-work/out")
+NVRC_BIN = os.environ.get("NVRC_BIN", "/home/ecurtin/nvsd-work/target/x86_64-unknown-linux-musl/release/NVRC")
 sys.path.insert(0, os.path.join(REPO, "scripts"))
 import vmrun  # noqa: E402
 
