@@ -7,7 +7,7 @@
 [Unit]
 Description=nvidia-smi conf-compute -srs: GPU ready state
 DefaultDependencies=no
-After=modprobe@nvidia.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nv-hostengine.service dcgm-exporter.service
+After=modprobe@nvidia.service nvidia-persistenced.service nvsd-cmdline.service nvsd-mode.service nvidia-smi-lmc.service nvidia-smi-lgc.service nvidia-smi-pl.service nv-hostengine.service dcgm-exporter.service nvidia-ctk-cdi.service
 ConditionPathExists=/run/nvsd/mode.gpu
 ConditionPathExists=/run/nvsd/smi.srs
 FailureAction=poweroff-immediate
