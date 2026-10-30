@@ -95,7 +95,12 @@ def main():
     ap.add_argument("--warmup", type=int, default=2)
     ap.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
-    variants = a.variants.split(",")
+    # "name" or "alias=spec" (spec like nvsd@/dir for an experimental overlay directory, or nvsd-probe)
+    specs = {}
+    for item in a.variants.split(","):
+        alias, _, spec = item.partition("=")
+        specs[alias] = spec or alias
+    variants = list(specs)
     L.build_tools()
     os.makedirs(os.path.join(WORK, "bench", "raw"), exist_ok=True)
     raw = os.path.join(WORK, "bench", "raw", a.label + ".jsonl")
@@ -104,7 +109,7 @@ def main():
         sc = SCENARIOS[name]
         images = {}
         for v in variants:
-            images[v] = L.build_image(v, sc["conf"], "bench-" + name, a.compress)
+            images[v] = L.build_image(specs[v], sc["conf"], "bench-" + name + "-" + v.replace("/", "_"), a.compress)
         sizes = {v: os.path.getsize(images[v]) for v in variants}
         print("== %s: %s  images=%s" % (name, sc["desc"], sizes), flush=True)
         for r in range(-a.warmup, a.runs):
@@ -112,7 +117,7 @@ def main():
             if r % 2:  # interleave, alternating who goes first
                 order.reverse()
             for v in order:
-                rep = L.boot(v, pci=sc["pci"], append=(sc["append"] + " " + a.append).strip(), image=images[v], timeout=60)
+                rep = L.boot(specs[v], pci=sc["pci"], append=(sc["append"] + " " + a.append).strip(), image=images[v], timeout=60)
                 m = metrics(rep, sizes[v])
                 if r < 0:
                     continue  # warm-up: page cache, KVM, qemu binary

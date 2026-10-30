@@ -14,8 +14,8 @@ def ensure_dirs(c, path):
             c.dir(cur)
 
 
-def apply(c, repo, out):
-    root = os.path.join(repo, "overlay")
+def apply(c, repo, out, root=None, skip_existing=False):
+    root = root or os.path.join(repo, "overlay")
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames.sort()
         rel = "/" + os.path.relpath(dirpath, root).strip(".").strip("/")
@@ -31,6 +31,8 @@ def apply(c, repo, out):
         for f in sorted(filenames):
             full = os.path.join(dirpath, f)
             p = os.path.join(rel, f)
+            if skip_existing and p.lstrip("/") in c.seen:
+                continue
             ensure_dirs(c, p)
             if os.path.islink(full):
                 c.symlink(p, os.readlink(full))
@@ -39,7 +41,7 @@ def apply(c, repo, out):
                 with open(full, "rb") as fh:
                     c.file(p, fh.read(), mode)
     helper = os.path.join(out, "nvsd-helper")
-    if os.path.exists(helper):
+    if root == os.path.join(repo, "overlay") and os.path.exists(helper):
         ensure_dirs(c, "/usr/lib/nvsd/x")
         with open(helper, "rb") as fh:
             c.file("/usr/lib/nvsd/nvsd-helper", fh.read(), 0o755)

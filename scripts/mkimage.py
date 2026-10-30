@@ -198,6 +198,7 @@ def main():
     ap.add_argument("--nvrc-bin")
     ap.add_argument("--extra", action="append", default=[], metavar="DEST=SRCFILE",
                     help="test-only: add a file to the image (e.g. a systemd drop-in)")
+    ap.add_argument("--overlay-extra", help="experiments: a directory whose files take precedence over overlay/")
     ap.add_argument("--probe", action="store_true",
                     help="benchmark calibration: same image contents, but /init is the kata-agent stub, so the "
                          "PID 1 CPU time of the kernel's own init thread (initramfs unpack, initcalls) can be measured")
@@ -216,7 +217,9 @@ def main():
         if a.variant == "nvsd":
             sys.path.insert(0, os.path.join(REPO, "scripts"))
             import nvsd_overlay
-            nvsd_overlay.apply(c, REPO, OUT)
+            if a.overlay_extra:
+                nvsd_overlay.apply(c, REPO, OUT, root=a.overlay_extra)
+            nvsd_overlay.apply(c, REPO, OUT, skip_existing=bool(a.overlay_extra))
     for spec in a.extra:
         dest, src = spec.split("=", 1)
         parts = dest.strip("/").split("/")[:-1]

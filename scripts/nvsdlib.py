@@ -34,10 +34,14 @@ def image_path(variant, fixture_name, compress):
 def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3", force=False, extra=None):
     """Build (or reuse) an image. fixture_text is the content of /etc/nvstub.conf. A variant name ending in
     -probe builds the calibration image (same contents, /init = kata-agent stub)."""
+    overlay_extra = None
+    if "@" in variant:  # experiments: nvsd@/path/to/overlay-dir
+        variant, overlay_extra = variant.split("@", 1)
     probe = variant.endswith("-probe")
     variant = variant[:-6] if probe else variant
     os.makedirs(os.path.join(OUT, "images"), exist_ok=True)
-    out = image_path(variant + ("-probe" if probe else ""), fixture_name, compress)
+    tag = ("-probe" if probe else "") + ("-x" + os.path.basename(overlay_extra.rstrip("/")) if overlay_extra else "")
+    out = image_path(variant + tag, fixture_name, compress)
     conf = os.path.join(OUT, "images", "fixture-%s.conf" % fixture_name)
     with open(conf, "w") as f:
         f.write(fixture_text)
@@ -50,6 +54,8 @@ def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3",
         args += ["--extra", "%s=%s" % (dest, src)]
     if probe:
         args += ["--probe"]
+    if overlay_extra:
+        args += ["--overlay-extra", overlay_extra]
     if variant in ("nvrc", "probe"):
         args += ["--nvrc-bin", NVRC_BIN]
     env = dict(os.environ, NVSD_OUT=OUT)

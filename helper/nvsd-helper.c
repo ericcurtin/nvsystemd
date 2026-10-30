@@ -296,6 +296,7 @@ static int cmd_wait_marker(int argc, char **argv) {
  *
  * An unmatched topology is NVRC's "unexpected topology" panic: fail fast.
  */
+static int cmd_lockdown(void);
 static int vpd_has_sw_mng(const char *dev) {
 	static char v[65536];
 	char p[300];
@@ -356,6 +357,13 @@ static int cmd_detect(void) {
 	struct buf b = BUF_INIT(f);
 	b_str(&b, "mode."); b_str(&b, mode); b_term(&b);
 	put(f, "", 0644);
+	if (seq(mode, "cpu")) { /* nothing will modprobe after this point: apply the lockdown now (see nvsd-lockdown.service) */
+		long efd = sys_open(GPU_EXT_ROOT, O_RDONLY | O_DIRECTORY | O_CLOEXEC, 0);
+		if (efd >= 0) { sys_close((int)efd); put("kata.env", "KATA_ATTESTER_VARIANT=nvidia\n", 0644); } /* NVRC sets it in every mode */
+		if (cmd_lockdown() != 0) return 1;
+		put("locked", "", 0644);
+		return 0;
+	}
 	int svc = mode[0] == 's';
 	int is_gpu = seq(mode, "gpu");
 	if (is_gpu || seq(mode, "servicevm-nvl4")) put("load.nvidia", "", 0644);

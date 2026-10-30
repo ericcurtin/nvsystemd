@@ -454,9 +454,10 @@ static void emit(const char *s) { sys_write(out_fd, s, slen(s)); }
 
 static char g_grep[48];
 static int g_kmsg_emit;
-static void kmsg_match(const char *msg) {
+static void kmsg_match(const char *msg, u64 ts) {
 	if (!g_kmsg_emit || !g_grep[0] || !sfind(msg, g_grep) || sfind(msg, "ommand line")) return;
 	emit("NVSD-KMSG ");
+	{ char t[24]; struct buf tb = BUF_INIT(t); b_u64(&tb, ts); b_char(&tb, ' '); b_term(&tb); emit(t); }
 	const char *e = msg; while (*e && *e != '\n') e++;
 	sys_write(out_fd, msg, (usize)(e - msg));
 	emit("\n");
@@ -475,14 +476,16 @@ static u64 init_ts_us(void) {
 		const char *semi = rec;
 		while (*semi && *semi != ';') semi++;
 		if (!*semi) continue;
-		kmsg_match(semi + 1);
-		if (!ts && sstarts(semi + 1, "Run /") && sfind(semi + 1, "as init process")) {
-			/* "pri,seq,ts_us,flags;msg" */
+		/* "pri,seq,ts_us,flags;msg" */
+		u64 rts;
+		{
 			const char *p = rec;
 			int commas = 0;
 			while (*p && commas < 2) { if (*p == ',') commas++; p++; }
-			ts = parse_u64_loose(p);
+			rts = parse_u64_loose(p);
 		}
+		kmsg_match(semi + 1, rts);
+		if (!ts && sstarts(semi + 1, "Run /") && sfind(semi + 1, "as init process")) ts = rts;
 	}
 	sys_close((int)fd);
 	return ts;

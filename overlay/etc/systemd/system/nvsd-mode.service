@@ -9,6 +9,7 @@ Description=Detect NVIDIA topology (NVRC mode)
 DefaultDependencies=no
 After=nvsd-extensions.target
 Requires=nvsd-extensions.target
+Wants=nvsd-syslog.service
 OnFailure=nvsd-poweroff.service
 
 [Service]
