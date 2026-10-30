@@ -323,7 +323,7 @@ def t20_servicevm_nvl4(variant, v):
     common_agent_checks(rep)
     assert seq_names(rep) == ["modprobe start", "modprobe done", "nv-fabricmanager start",
                               "nv-fabricmanager ready", "kata-agent start"], seq_names(rep)
-    assert argv_of(rep, "nv-fabricmanager") == "-c /run/fabricmanager.cfg FABRIC_MODE=1 PARTITION_RAIL_POLICY=greedy"
+    assert argv_of(rep, "nv-fabricmanager") == "-c /run/fabricmanager.cfg FABRIC_MODE=1 PARTITION_RAIL_POLICY=greedy cfg_mode=0100"  # hex 0x100 = 0o400
 
 
 @test
@@ -331,7 +331,7 @@ def t21_gpu_with_nvl4_switches(variant, v):
     """8 GPU + 4 NVSwitch -> gpu mode with fabric manager FABRIC_MODE=0."""
     rep = L.boot(variant, pci=["gpu8-nvl4"], append=ECHO)
     common_agent_checks(rep)
-    assert argv_of(rep, "nv-fabricmanager") == "-c /run/fabricmanager.cfg FABRIC_MODE=0 PARTITION_RAIL_POLICY=greedy"
+    assert argv_of(rep, "nv-fabricmanager") == "-c /run/fabricmanager.cfg FABRIC_MODE=0 PARTITION_RAIL_POLICY=greedy cfg_mode=0100"  # hex 0x100 = 0o400
     assert rep.events("nvidia-persistenced", "start")
     mods = [e["detail"] for e in rep.events("modprobe", "start")]
     assert mods[0].endswith("argv=nvidia"), mods

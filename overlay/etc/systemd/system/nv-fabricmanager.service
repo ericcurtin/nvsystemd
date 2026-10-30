@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: daemon.rs nv_fabricmanager(fabric_mode, rail_policy): copy the stock fabricmanager.cfg to
+# /run, set FABRIC_MODE (0 = gpu mode, 1 = service VM) and PARTITION_RAIL_POLICY (greedy NVL4,
+# symmetric NVL5), chmod 0400, start `nv-fabricmanager -c /run/fabricmanager.cfg [-g <port GUID>]`
+# and block until the daemon logs "FM starting NvLink Inband" (120 s timeout).
+#  - mode/policy come from /run/nvsd/fm.env (nvsd-mode.service); the config edit is the helper's
+#    fm-config (systemd cannot edit a KEY=VALUE file).
+#  - runs in both fabric modes: gpu mode with NVL4/NVL5 switches (FABRIC_MODE=0) and servicevm-nvl4/5
+#    (FABRIC_MODE=1); the unit is skipped when no NVSwitch topology was detected.
+#  - NVRC runs FM before nvidia-persistenced (gpu mode): nvidia-persistenced.service is ordered
+#    after this unit; on NVL5 it is also ordered after nvlsm (the subnet manager must be up).
+[Unit]
+Description=nv-fabricmanager (NVSwitch fabric manager)
+DefaultDependencies=no
+Requires=nvsd-syslog.socket
+After=nvsd-syslog.socket nvsd-mode.service modprobe@nvidia.service modprobe@nvidia-uvm.service nvsd-uvm-tools.service nvlsm.service
+ConditionPathExists=/run/nvsd/fm
+FailureAction=poweroff-immediate
+
+[Service]
+Type=forking
+GuessMainPID=yes
+EnvironmentFile=/run/nvsd/fm.env
+EnvironmentFile=-/run/nvsd/gpu-ext.env
+EnvironmentFile=-/run/nvsd/port-guid.env
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/bin:/bin
+ExecStartPre=/usr/lib/nvsd/nvsd-helper fm-config ${NVSD_GPU_ROOT}/usr/share/nvidia/nvswitch/fabricmanager.cfg $NVSD_FM_MODE $NVSD_FM_POLICY
+ExecStart=nv-fabricmanager -c /run/fabricmanager.cfg $NVSD_FM_GUID_ARGS
+ExecStartPost=/usr/lib/nvsd/nvsd-helper wait-marker "FM starting NvLink Inband" 120
+TimeoutStartSec=120
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit

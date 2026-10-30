@@ -419,6 +419,53 @@ static int cmd_uvm_tools(int argc, char **argv) {
 	return 0;
 }
 
+/* ------------------------------------------------------------------ fm-config
+ * NVRC daemon.rs nv_fabricmanager() + config.rs update_config_file(): copy the stock
+ * fabricmanager.cfg to the writable /run/fabricmanager.cfg, set FABRIC_MODE and
+ * PARTITION_RAIL_POLICY (existing "KEY=" lines are replaced in place, missing keys appended),
+ * then chmod 0400. systemd cannot edit a KEY=VALUE file.
+ *   fm-config SRC FABRIC_MODE RAIL_POLICY
+ * Same line semantics as NVRC: a line is the key's if it starts with "KEY=" after trimming. */
+static int cmd_fm_config(int argc, char **argv) {
+	if (argc != 5) return die("fm-config", "usage: fm-config SRC FABRIC_MODE RAIL_POLICY");
+	static char in[65536], out[65536 + 256];
+	long n = read_file(argv[2], in, sizeof(in));
+	if (n < 0) return die("fm-config", "cannot read the stock fabricmanager.cfg");
+	const char *keys[2] = { "FABRIC_MODE", "PARTITION_RAIL_POLICY" };
+	const char *vals[2] = { argv[3], argv[4] };
+	int found[2] = { 0, 0 };
+	struct buf o = { out, 0, sizeof(out) };
+	const char *p = in;
+	while (*p) {
+		const char *e = p;
+		while (*e && *e != '\n') e++;
+		const char *le = e;
+		if (le > p && le[-1] == '\r') le--; /* Rust str::lines() */
+		const char *t = p;
+		while (t < le && (*t == ' ' || *t == '\t')) t++;
+		int hit = -1;
+		for (int k = 0; k < 2; k++) {
+			usize kl = slen(keys[k]);
+			if ((usize)(le - t) > kl && !memcmp(t, keys[k], kl) && t[kl] == '=') { hit = k; break; }
+		}
+		if (hit >= 0) {
+			found[hit] = 1;
+			b_str(&o, keys[hit]); b_char(&o, '='); b_str(&o, vals[hit]);
+		} else {
+			b_mem(&o, p, (usize)(le - p));
+		}
+		b_char(&o, '\n');
+		p = *e ? e + 1 : e;
+	}
+	for (int k = 0; k < 2; k++)
+		if (!found[k]) { b_str(&o, keys[k]); b_char(&o, '='); b_str(&o, vals[k]); b_char(&o, '\n'); }
+	if (o.len + 1 >= o.cap) return die("fm-config", "config too large");
+	sys_unlink("/run/fabricmanager.cfg");
+	if (write_file("/run/fabricmanager.cfg", out, o.len, O_CREAT | O_TRUNC, 0600) < 0) return die("fm-config", "cannot write /run/fabricmanager.cfg");
+	if (sys_chmod("/run/fabricmanager.cfg", 0400) < 0) return die("fm-config", "cannot chmod /run/fabricmanager.cfg");
+	return 0;
+}
+
 int main_(int argc, char **argv) {
 	if (argc < 2) return die("main", "usage: nvsd-helper <subcommand>");
 	read_file("/proc/cmdline", g_cmdline, sizeof(g_cmdline));
@@ -427,6 +474,7 @@ int main_(int argc, char **argv) {
 	if (seq(sub, "hash")) return cmd_hash(argc, argv);
 	if (seq(sub, "detect")) return cmd_detect();
 	if (seq(sub, "lockdown")) return cmd_lockdown();
+	if (seq(sub, "fm-config")) return cmd_fm_config(argc, argv);
 	if (seq(sub, "uvm-tools")) return cmd_uvm_tools(argc, argv);
 	if (seq(sub, "syslog")) return cmd_syslog();
 	if (seq(sub, "wait-marker")) return cmd_wait_marker(argc, argv);

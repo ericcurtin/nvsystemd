@@ -357,7 +357,13 @@ static int do_fm(void) {
 	char d[500];
 	struct buf b = BUF_INIT(d);
 	b_str(&b, g_joined); b_str(&b, " FABRIC_MODE="); b_str(&b, mode);
-	b_str(&b, " PARTITION_RAIL_POLICY="); b_str(&b, rail); b_term(&b);
+	b_str(&b, " PARTITION_RAIL_POLICY="); b_str(&b, rail);
+	{ /* NVRC chmods the runtime config 0400 */
+		char sb[256]; u32 mode = 0;
+		if (sc4(SYS_newfstatat, AT_FDCWD, (long)"/run/fabricmanager.cfg", (long)sb, 0) == 0) memcpy(&mode, sb + 24, 4);
+		b_str(&b, " cfg_mode="); b_hex(&b, mode & 07777, 4);
+	}
+	b_term(&b);
 	log_event("nv-fabricmanager", "start", d);
 	daemonize("nv-fabricmanager", "FM starting NvLink Inband", conf_num("nv-fabricmanager", NULL, "latency", 0));
 	return 0;

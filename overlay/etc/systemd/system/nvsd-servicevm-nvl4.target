@@ -6,6 +6,6 @@
 [Unit]
 Description=NVRC mode: servicevm-nvl4
 DefaultDependencies=no
-Requires=nvsd-mode.service modprobe@nvidia.service
-After=nvsd-mode.service modprobe@nvidia.service
+Requires=nvsd-mode.service modprobe@nvidia.service nv-fabricmanager.service
+After=nvsd-mode.service modprobe@nvidia.service nv-fabricmanager.service
 ConditionPathExists=/run/nvsd/mode.servicevm-nvl4
