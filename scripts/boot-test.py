@@ -83,6 +83,49 @@ def common_agent_checks(rep):
 
 
 @test
+def t01_api_filesystems_and_loopback(variant, v):
+    """NVRC mount.rs + net.rs: /proc /sys /run /tmp are mounted (tmp: nosuid,nodev) and lo is up."""
+    rep = L.boot(variant)
+    booted_agent(rep)
+    for mp, fs in (("/proc", "proc"), ("/sys", "sysfs"), ("/run", "tmpfs"), ("/tmp", "tmpfs")):
+        assert mp in rep.mounts and rep.mounts[mp][0] == fs, (mp, rep.mounts.get(mp))
+    opts = rep.mounts["/tmp"][1]
+    assert "nosuid" in opts and "nodev" in opts, opts
+    assert int(rep.facts["lo_flags"], 16) & 1, "lo must be UP: %s" % rep.facts
+
+
+@test
+def t02_agent_limits(variant, v):
+    """kata-agent: OOM score -997 and RLIMIT_NOFILE 1048576 (NVRC kata_agent.rs agent_setup)."""
+    rep = L.boot(variant)
+    booted_agent(rep)
+    e = rep.env
+    assert e["oom_score_adj"] == "-997", e
+    assert e["nofile_cur"] == "1048576" and e["nofile_max"] == "1048576", e
+
+
+@test
+def t03_module_lockdown_before_agent(variant, v):
+    """lockdown.rs: kernel.modules_disabled=1 is in force when kata-agent starts."""
+    rep = L.boot(variant)
+    booted_agent(rep)
+    assert rep.env["modules_disabled"] == "1", rep.env
+
+
+@test
+def t04_socket_buffer_sysctls_and_log(variant, v):
+    """kmsg.rs kernlog_setup(): four net.core buffers are 16 MiB; nvrc.log=<any> turns printk_devkmsg on."""
+    rep = L.boot(variant)
+    booted_agent(rep)
+    for k in ("rmem_default", "rmem_max", "wmem_default", "wmem_max"):
+        assert rep.facts[k] == "16777216", rep.facts
+    assert rep.facts["printk_devkmsg"] == "ratelimit", rep.facts
+    rep = L.boot(variant, append="nvrc.log=info")
+    booted_agent(rep)
+    assert rep.facts["printk_devkmsg"] == "on", rep.facts
+
+
+@test
 def t10_cpu_mode(variant, v):
     """No NVIDIA PCI devices -> cpu mode: nothing but kata-agent runs."""
     rep = L.boot(variant, append=ECHO)

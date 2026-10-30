@@ -1,10 +1,12 @@
 # SPDX-License-Identifier: Apache-2.0
-# Commit 0: the only unit. Reaching it proves systemd (stock Fedora binary) came up
-# as PID 1 from the initramfs. SuccessAction powers the VM off immediately so the
-# harness gets a clean, deterministic end of boot.
+# default.target. The VM's whole boot is "reach this target"; kata-agent (the VM lifetime
+# process) is the last thing it starts. Any failure to get there powers the VM off, as NVRC's
+# panic hook does.
 [Unit]
-Description=nvsystemd boot complete
+Description=nvsystemd boot (NVRC replacement)
 DefaultDependencies=no
-StopWhenUnneeded=yes
-SuccessAction=poweroff-immediate
+Requires=kata-agent.service
+After=kata-agent.service
 FailureAction=poweroff-immediate
+JobTimeoutSec=900
+JobTimeoutAction=poweroff-immediate

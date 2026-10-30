@@ -62,6 +62,8 @@ class Report:
         self.mem = {}
         self.procs = {}
         self.census = {}
+        self.mounts = {}
+        self.facts = {}
         self.log = []
         self.complete = False
         self.kata_host_t = None
@@ -80,6 +82,11 @@ class Report:
                 d = kv(ln)
                 d["_label"] = ln.split()[1]
                 self.procs.setdefault(d["_label"], []).append(d)
+            elif ln.startswith("NVSD-MOUNT "):
+                _, mp, fs, opts = ln.split(" ", 3)
+                self.mounts[mp] = (fs, opts.split(","))
+            elif ln.startswith("NVSD-FACT "):
+                self.facts = kv(ln)
             elif ln.startswith("NVSD-CENSUS "):
                 self.census[ln.split()[1]] = {k: int(v) for k, v in kv(ln).items()}
             elif ln == "NVSD-LOG-BEGIN":

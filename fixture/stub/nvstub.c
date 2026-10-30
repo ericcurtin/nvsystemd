@@ -171,10 +171,8 @@ static int is_dir(const char *p) {
 	return 1;
 }
 static int exists(const char *p) {
-	long fd = sys_open(p, O_RDONLY, 0);
-	if (fd < 0) return 0;
-	sys_close((int)fd);
-	return 1;
+	char st[256];
+	return sc4(SYS_newfstatat, AT_FDCWD, (long)p, (long)st, 0) == 0;
 }
 static void mkdir_p(const char *path) {
 	char t[256];
@@ -530,6 +528,61 @@ static void mem_line(const char *label) {
 	emit(l);
 }
 
+static void facts(void) {
+	/* mount table: one line per mount (mountpoint fstype per-mount-options) */
+	static char mi[16384];
+	if (read_file("/proc/self/mountinfo", mi, sizeof(mi)) > 0) {
+		const char *p = mi;
+		while (*p) {
+			const char *e = p;
+			while (*e && *e != '\n') e++;
+			/* fields: id parent maj:min root mountpoint opts [optional...] - fstype source superopts */
+			const char *f[8]; int nf = 0; const char *q = p;
+			while (q < e && nf < 6) { f[nf++] = q; while (q < e && *q != ' ') q++; while (q < e && *q == ' ') q++; }
+			const char *dash = p;
+			while (dash + 3 < e && !(dash[0] == ' ' && dash[1] == '-' && dash[2] == ' ')) dash++;
+			if (nf == 6 && dash + 3 < e) {
+				char l[300];
+				struct buf b = BUF_INIT(l);
+				b_str(&b, "NVSD-MOUNT ");
+				const char *x = f[4]; while (x < e && *x != ' ') b_char(&b, *x++);
+				b_char(&b, ' ');
+				x = dash + 3; while (x < e && *x != ' ') b_char(&b, *x++);
+				b_char(&b, ' ');
+				x = f[5]; while (x < e && *x != ' ') b_char(&b, *x++);
+				b_char(&b, '\n'); b_term(&b);
+				emit(l);
+			}
+			p = *e ? e + 1 : e;
+		}
+	}
+	static const struct { const char *key, *path; } F[] = {
+		{ "lo_flags", "/sys/class/net/lo/flags" },
+		{ "rmem_default", "/proc/sys/net/core/rmem_default" },
+		{ "rmem_max", "/proc/sys/net/core/rmem_max" },
+		{ "wmem_default", "/proc/sys/net/core/wmem_default" },
+		{ "wmem_max", "/proc/sys/net/core/wmem_max" },
+		{ "printk_devkmsg", "/proc/sys/kernel/printk_devkmsg" },
+		{ "modules_disabled", "/proc/sys/kernel/modules_disabled" },
+	};
+	char l[600];
+	struct buf b = BUF_INIT(l);
+	b_str(&b, "NVSD-FACT");
+	for (usize i = 0; i < sizeof(F) / sizeof(F[0]); i++) {
+		char v[64] = "?";
+		read_file(F[i].path, v, sizeof(v)); rtrim(v);
+		/* printk_devkmsg reads like "on [ratelimit] off": keep the bracketed word */
+		if (seq(F[i].key, "printk_devkmsg")) {
+			char *o = v; while (*o && *o != '[') o++;
+			if (*o) { o++; char *c = o; while (*c && *c != ']') c++; *c = 0; memmove(v, o, slen(o) + 1); }
+		}
+		b_char(&b, ' '); b_str(&b, F[i].key); b_char(&b, '='); b_str(&b, v);
+	}
+	b_str(&b, " dev_log="); b_str(&b, exists("/dev/log") ? "1" : "0");
+	b_str(&b, "\n"); b_term(&b);
+	emit(l);
+}
+
 static const char *env_get(const char *k) {
 	usize kl = slen(k);
 	for (char **e = g_envp; e && *e; e++)
@@ -579,6 +632,7 @@ static int do_kata(void) {
 	emit(l);
 	mem_line("at-start");
 	census("at-start");
+	facts();
 
 	i64 grace = 200;
 	{

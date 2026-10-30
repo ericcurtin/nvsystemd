@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: kata_agent.rs fork_agent()/agent_setup()/exec_agent(). NVRC execs the agent so that it
+# becomes PID 1; here it is a normal service of the systemd that is PID 1. Its lifetime is the
+# VM's lifetime: any exit powers the VM off (NVRC: PID 1 gone = guest gone).
+[Unit]
+Description=kata-agent (VM lifetime process)
+DefaultDependencies=no
+SuccessAction=poweroff-immediate
+FailureAction=poweroff-immediate
+
+[Service]
+Type=exec
+ExecStart=/usr/bin/kata-agent
+# agent_setup(): RLIMIT_NOFILE 1M, oom_score_adj -997
+LimitNOFILE=1048576
+OOMScoreAdjust=-997
+# NVRC leaves the agent on the kernel console as stdio
+StandardInput=null
+StandardOutput=tty
+StandardError=inherit
+TTYPath=/dev/console
