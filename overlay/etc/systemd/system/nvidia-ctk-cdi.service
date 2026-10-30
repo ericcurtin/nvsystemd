@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: toolkit.rs nvidia_ctk_cdi(): `nvidia-ctk -d cdi generate --output=/var/run/cdi/nvidia.yaml`
+# [--driver-root=<ext> --dev-root=/ --nvidia-cdi-hook-path=<ext>/bin/nvidia-cdi-hook with the
+# gpu extension, via $NVSD_CTK_ARGS from /run/nvsd/gpu-ext.env]. Always runs in gpu mode.
+# It enumerates the GPUs and /dev/nvidia* nodes, which nvidia-persistenced creates, so it is
+# ordered after the persistence daemon; it does not wait for the clock/power nvidia-smi calls.
+[Unit]
+Description=nvidia-ctk cdi generate
+DefaultDependencies=no
+After=modprobe@nvidia-uvm.service nvidia-persistenced.service nvsd-mode.service
+ConditionPathExists=/run/nvsd/mode.gpu
+FailureAction=poweroff-immediate
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/run/nvsd/gpu-ext.env
+ExecSearchPath=/run/kata-extensions/gpu/bin:/usr/bin:/bin
+ExecStart=nvidia-ctk -d cdi generate --output=/var/run/cdi/nvidia.yaml $NVSD_CTK_ARGS
+StandardInput=null
+StandardOutput=file:/run/nvsd/out
+StandardError=inherit
