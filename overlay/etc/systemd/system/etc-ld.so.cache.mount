@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: Apache-2.0
+# NVRC: gpu_extension.rs refresh_ldcache_in(): bind_over(/run/ld.so.cache, /etc/ld.so.cache).
+[Unit]
+Description=Loader cache with the gpu extension libraries
+DefaultDependencies=no
+Requires=nvsd-ldcache.service
+After=nvsd-ldcache.service
+ConditionPathIsDirectory=/run/kata-extensions/gpu
+OnFailure=nvsd-poweroff.service
+
+[Mount]
+What=/run/ld.so.cache
+Where=/etc/ld.so.cache
+Type=none
+Options=bind

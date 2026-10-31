@@ -14,3 +14,5 @@ vmlinuz*
 __pycache__/
 *.pyc
 /bench/results/*.raw
+# the overlay is the product: its data files (ld.so.conf, etc-ld.so.cache.mount) match the *.so.* safety net above
+!/overlay/**
