@@ -27,6 +27,13 @@ def build_tools():
         sh(["make", "-C", REPO, "-s"] + targets, env=dict(os.environ, OUT=OUT))
 
 
+def systemd_binary(variant):
+    """Path (on the build host) of the systemd binary that goes into the image of an nvsd* variant."""
+    if variant.endswith("-centos10"):
+        return os.path.join(os.environ.get("NVSD_CENTOS10", "/home/ecurtin/nvsd-work/centos10/sysroot"), "usr/lib/systemd/systemd")
+    return "/usr/lib/systemd/systemd"
+
+
 def image_path(variant, fixture_name, compress):
     return os.path.join(OUT, "images", "%s-%s-%s.cpio%s" % (variant, fixture_name, compress, {"none": "", "zstd": ".zst", "zstd3": ".zst", "gzip": ".gz", "xz": ".xz", "lz4": ".lz4"}[compress]))
 
@@ -39,14 +46,19 @@ def build_image(variant, fixture_text="", fixture_name="zero", compress="zstd3",
         variant, overlay_extra = variant.split("@", 1)
     probe = variant.endswith("-probe")
     variant = variant[:-6] if probe else variant
+    # "nvsd" = nvsystemd on Fedora's systemd, "nvsd-centos10" = the same overlay on CentOS Stream 10's systemd
+    image_variant = variant
+    base = "fedora"
+    if variant.endswith("-centos10"):
+        variant, base = variant[:-9], "centos10"
     os.makedirs(os.path.join(OUT, "images"), exist_ok=True)
     tag = ("-probe" if probe else "") + ("-x" + os.path.basename(overlay_extra.rstrip("/")) if overlay_extra else "")
-    out = image_path(variant + tag, fixture_name, compress)
+    out = image_path(image_variant + tag, fixture_name, compress)
     conf = os.path.join(OUT, "images", "fixture-%s.conf" % fixture_name)
     with open(conf, "w") as f:
         f.write(fixture_text)
     args = [sys.executable, os.path.join(REPO, "scripts", "mkimage.py"), "--variant", variant, "--out", out,
-            "--compress", compress, "--fixture-conf", conf]
+            "--compress", compress, "--fixture-conf", conf, "--base", base]
     for dest, text in (extra or {}).items():  # test-only files, e.g. systemd drop-ins
         src = os.path.join(OUT, "images", "extra-%s-%s" % (fixture_name, dest.strip("/").replace("/", "_")))
         with open(src, "w") as f:

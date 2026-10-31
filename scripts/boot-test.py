@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """Boot tests: boot images in QEMU/KVM and assert on what the serial console shows.
 
-  scripts/boot-test.py [--variant nvsd|nvrc] [-k substring] [-v]
+  scripts/boot-test.py [--variant nvsd|nvsd-centos10|nvrc] [-k substring] [-v]
 
 Each test lists the kernel command line, the fake PCI topology, the fixture
 config and the assertions. Nothing is reported as passing unless QEMU was booted
@@ -27,7 +27,7 @@ def test(fn):
 @test
 def t00_systemd_reaches_boot_target_and_powers_off(variant, v):
     """commit 0: stock systemd is PID 1, reaches nvsd-boot.target and powers off cleanly."""
-    if variant != "nvsd":
+    if not variant.startswith("nvsd"):
         return "skip: nvsd only"
     rep = L.boot("nvsd", append="systemd.show_status=yes", timeout=20)
     assert "Reached target nvsd-boot.target" in rep.text, "target marker missing:\n" + rep.text
@@ -134,7 +134,7 @@ def t05_init_digest_logged_only_when_logging(variant, v):
     import hashlib
     rep = L.boot(variant, append="nvrc.log=info nvstub.kmsg_grep=sha256=")
     booted_agent(rep)
-    want = hashlib.sha256(open(L.NVRC_BIN if variant == "nvrc" else "/usr/lib/systemd/systemd", "rb").read()).hexdigest()
+    want = hashlib.sha256(open(L.NVRC_BIN if variant == "nvrc" else L.systemd_binary(variant), "rb").read()).hexdigest()
     assert any("sha256=" + want in m for m in rep.kmsg), (want, rep.kmsg)
     rep = L.boot(variant, append="nvstub.kmsg_grep=sha256=")
     booted_agent(rep)
@@ -152,7 +152,7 @@ def t06_dev_log_socket_exists(variant, v):
 @test
 def u07_mode_targets_selected_from_topology(variant, v):
     """nvsd-init.service + mode targets (nvsystemd only): exactly the target of the detected mode is reached."""
-    if variant != "nvsd":
+    if not variant.startswith("nvsd"):
         return "skip: nvsd only"
     want = {"cpu": ("none", "nvsd-cpu.target"), "gpu": ("gpu1", "nvsd-gpu.target"),
             "nvl4": ("nvl4", "nvsd-servicevm-nvl4.target"), "gpu8-nvl4": ("gpu8-nvl4", "nvsd-gpu.target")}
@@ -181,7 +181,7 @@ def u08_modprobe_units(variant, v):
 def u09_uvm_tools_node_is_created(variant, v):
     """nvsd-uvm-tools.service creates /dev/nvidia-uvm-tools c <major>:1 mode 0666. The simulated modprobe cannot
     register a char major, so a test-only drop-in points the helper at an existing driver name ("mem", major 1)."""
-    if variant != "nvsd":
+    if not variant.startswith("nvsd"):
         return "skip: nvsd only"
     dropin = "[Service]\nExecStart=\nExecStart=/usr/lib/nvsd/nvsd-helper uvm-tools mem\n"
     rep = L.boot(variant, pci=["gpu1"], append=ECHO + " nvrc.uvm.tools=on", fixture_name="uvmtest",
@@ -238,7 +238,7 @@ def u12_nvl5_flow_with_fake_infiniband(variant, v):
     """servicevm-nvl5 happy path: modules, port GUID (first SM-enabled device by name), nvlsm before the fabric
     manager, symmetric rail policy. sysfs is read-only, so a test-only drop-in points ib-guid at a fixture tree
     in which mlx5_0 has the SM disabled (cap_mask bit 10) and must be skipped."""
-    if variant != "nvsd":
+    if not variant.startswith("nvsd"):
         return "skip: nvsd only"
     base = "/usr/share/nvsd-test/infiniband/"
     extra = {
@@ -300,7 +300,7 @@ def u14_gpu_extension_paths(variant, v):
     builds a fake tree; the dm-verity/erofs mount itself cannot run in this VM): modprobe --dirname, binaries
     resolved inside the extension, nvidia-ctk root flags, collectors file, loader cache regenerated and bound,
     firmware bound, KATA_ATTESTER_VARIANT=nvidia."""
-    if variant != "nvsd":
+    if not variant.startswith("nvsd"):
         return "skip: nvsd only"
     unit = ("[Unit]\nDescription=test only: fake gpu extension\nDefaultDependencies=no\n"
             "Before=nvsd-extensions.target nvsd-ldcache.service usr-lib-firmware-nvidia.mount nvsd-init.service\n"
@@ -495,14 +495,14 @@ def t36_uvm_tools_without_uvm_major_fails_closed(variant, v):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--variant", default="nvsd", choices=["nvsd", "nvrc"])
+    ap.add_argument("--variant", default="nvsd", choices=["nvsd", "nvsd-centos10", "nvrc"])
     ap.add_argument("-k", default="")
     ap.add_argument("-v", action="store_true")
     ap.add_argument("--all", action="store_true", help="run every test against nvsd, not only the enabled ones")
     a = ap.parse_args()
     L.build_tools()
     enabled = None
-    if a.variant == "nvsd" and not a.all:
+    if a.variant.startswith("nvsd") and not a.all:
         # nvsystemd is built up one unit at a time; tests/nvsd-enabled.txt grows with each commit
         with open(os.path.join(L.REPO, "tests", "nvsd-enabled.txt")) as f:
             enabled = {ln.split()[0] for ln in f if ln.strip() and not ln.startswith("#")}

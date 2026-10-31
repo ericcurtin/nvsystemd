@@ -6,8 +6,14 @@ No root needed: the cpio (newc) archive is written directly, including device
 nodes, symlinks and hard links. Nothing produced here is ever committed.
 
   mkimage.py --variant nvrc    --nvrc-bin PATH       --out X.cpio.zst
-  mkimage.py --variant nvsd                          --out X.cpio.zst
-  mkimage.py --variant systemd-only                  --out X.cpio.zst
+  mkimage.py --variant nvsd [--base fedora|centos10] --out X.cpio.zst
+  mkimage.py --variant systemd-only [--base ...]     --out X.cpio.zst
+
+--base selects which systemd userland is put in the image (default fedora: the build host's systemd and the
+libraries it links, copied by ldd). --base centos10 uses the self-contained sysroot made by
+scripts/fetch-centos10-systemd.sh (CentOS Stream 10's systemd, systemd-executor, mount, their glibc and every
+library); the two bases never share a library. For centos10 the files under overlay-centos10/ take precedence over
+overlay/ (build-time selected variants of units that systemd 257 cannot parse the same way).
 
 All variants share the same base skeleton and the same test fixture (the nvstub
 multi-call binary hard-linked at the paths NVRC execs, plus the fixture config
@@ -22,6 +28,7 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.environ.get("NVSD_OUT", "/home/ecurtin/nvsd-work/out")
+CENTOS10_SYSROOT = os.environ.get("NVSD_CENTOS10", "/home/ecurtin/nvsd-work/centos10/sysroot")
 
 STUB_NAMES = {
     "/usr/sbin/modprobe": "modprobe",
@@ -175,6 +182,30 @@ def add_systemd(c, with_nvsd, probe=False):
         c.symlink("/init", "usr/lib/systemd/systemd")
 
 
+def add_systemd_centos10(c, probe=False):
+    """CentOS Stream 10's systemd from the sysroot (scripts/fetch-centos10-systemd.sh), unmodified. Every file of
+    the sysroot is placed at the same path; nothing comes from the host."""
+    root = CENTOS10_SYSROOT
+    if not os.path.isdir(root):
+        sys.exit("no CentOS Stream 10 sysroot at %s (run scripts/fetch-centos10-systemd.sh)" % root)
+    c.dir("/usr/lib/systemd")
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames.sort()
+        rel = "/" + os.path.relpath(dirpath, root).strip(".").strip("/")
+        for d in dirnames:
+            p = os.path.join(rel, d)
+            if p.lstrip("/") not in c.seen:
+                c.dir(p)
+        for f in sorted(filenames):
+            full = os.path.join(dirpath, f)
+            assert not os.path.islink(full), full
+            c.file(os.path.join(rel, f), read(full), 0o755)
+    if probe:
+        c.file("/init", read(os.path.join(OUT, "nvstub")), 0o755)
+    else:
+        c.symlink("/init", "usr/lib/systemd/systemd")
+
+
 def compress(raw, out, how):
     if how == "none":
         os.replace(raw, out)
@@ -194,6 +225,8 @@ def compress(raw, out, how):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--variant", required=True, choices=["nvrc", "nvsd", "systemd-only"])
+    ap.add_argument("--base", default="fedora", choices=["fedora", "centos10"],
+                    help="systemd userland: the build host's Fedora systemd (default) or the CentOS Stream 10 sysroot")
     ap.add_argument("--out", required=True)
     ap.add_argument("--compress", default="zstd", choices=["none", "zstd", "zstd3", "gzip", "xz", "lz4"])
     ap.add_argument("--nvrc-bin")
@@ -214,13 +247,19 @@ def main():
             sys.exit("--nvrc-bin required")
         c.file("/init", read(a.probe and os.path.join(OUT, "nvstub") or a.nvrc_bin), 0o755)
     else:
-        add_systemd(c, a.variant == "nvsd", a.probe)
+        if a.base == "centos10":
+            add_systemd_centos10(c, a.probe)
+        else:
+            add_systemd(c, a.variant == "nvsd", a.probe)
         if a.variant == "nvsd":
             sys.path.insert(0, os.path.join(REPO, "scripts"))
             import nvsd_overlay
-            if a.overlay_extra:
-                nvsd_overlay.apply(c, REPO, OUT, root=a.overlay_extra)
-            nvsd_overlay.apply(c, REPO, OUT, skip_existing=bool(a.overlay_extra))
+            # precedence: experiment directory, then the base's own variants, then overlay/
+            roots = [r for r in (a.overlay_extra, os.path.join(REPO, "overlay-centos10") if a.base == "centos10" else None)
+                     if r and os.path.isdir(r)]
+            for i, r in enumerate(roots):
+                nvsd_overlay.apply(c, REPO, OUT, root=r, skip_existing=i > 0)
+            nvsd_overlay.apply(c, REPO, OUT, skip_existing=bool(roots))
     for spec in a.extra:
         dest, src = spec.split("=", 1)
         parts = dest.strip("/").split("/")[:-1]
