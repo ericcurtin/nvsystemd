@@ -1,3 +1,5 @@
+> **Suspect data.** Collected under the fakepci file descriptor leak (see README.md in this directory): late rounds of runs that booted GPU scenarios may be distorted by host memory pressure. Kept for transparency; the conclusions in docs/BENCHMARK.md use the clean `final6` and `baseline3` runs.
+
 
 #### baseline / S0
 

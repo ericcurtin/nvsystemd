@@ -1,3 +1,5 @@
+> **Suspect data.** Collected under the fakepci file descriptor leak (see README.md in this directory): late rounds of runs that booted GPU scenarios may be distorted by host memory pressure. Kept for transparency; the conclusions in docs/BENCHMARK.md use the clean `final6` and `baseline3` runs.
+
 # Tuning experiments (paired, interleaved, SIMULATED fixture)
 
 Each experiment boots the variants round-robin in the same rounds on the same QEMU configuration; the table shows medians of the
