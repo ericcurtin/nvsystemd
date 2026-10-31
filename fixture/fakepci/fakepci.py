@@ -102,7 +102,14 @@ class Device(threading.Thread):
     def serve(self, conn):
         while True:
             # first read of a message may carry SCM_RIGHTS fds (DMA_MAP): use recvmsg
-            data, _anc, _fl, _ad = conn.recvmsg(HDR.size, socket.CMSG_LEN(16 * 4))
+            data, anc, _fl, _ad = conn.recvmsg(HDR.size, socket.CMSG_LEN(16 * 4))
+            # DMA_MAP hands over a dup of QEMU's guest RAM memfd. We never map it, so close it at once: leaving it
+            # open kept every booted guest's 512 MiB of shared memory alive for as long as the benchmark ran (tens of
+            # GiB over a full run, which exhausted the host).
+            for level, kind, cdata in anc:
+                if level == socket.SOL_SOCKET and kind == socket.SCM_RIGHTS:
+                    for fd in struct.unpack("%di" % (len(cdata) // 4), cdata[:len(cdata) // 4 * 4]):
+                        os.close(fd)
             if not data:
                 return
             while len(data) < HDR.size:
