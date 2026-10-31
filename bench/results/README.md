@@ -21,5 +21,10 @@ The superseded data of runs that never completed (`final4`, `baseline2`) was nev
 
 ## Clean data
 
-Runs made after the fix, with the driver guard of `bench/run.py` (abort when the driver holds more than 64 fds or system Shmem
-exceeds 4 GiB after a round) active: see the entries labelled `final6` and `baseline3` (when present) and docs/BENCHMARK.md.
+Collected on 2026-10-31 after the fix, with the driver guard of `bench/run.py` active (abort when the driver holds more than 64 fds or
+system Shmem exceeds 4 GiB after a round):
+
+* `final6.csv`, `final6.md`: the three-column run (S0-S4 and the latency sweep, 30 rounds each, interleaved), the source of the tables in docs/BENCHMARK.md
+* `baseline3.csv`, `baseline3.md`: the untuned commit (nvrc and Fedora columns) for the before/after tuning table
+
+Memory behaviour of these runs: 0 ms memory stall in every boot, swap unused, Shmem at most 199 MB (host watcher log).
