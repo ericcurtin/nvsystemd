@@ -34,7 +34,7 @@ Values that reach unit files through `EnvironmentFile=` are restricted: numbers 
 in `NVSD_FM_GUID_ARGS`. systemd splits `$VAR` on whitespace only, never through a shell.
 
 A memory-safety bug in the helper is a real risk that NVRC (Rust) does not have in its own code. The mitigation is size
-(about 1000 lines including comments, no allocation, no libc) and the fact that every subcommand is a one-shot, short-lived
+(about 800 lines including comments, no allocation, no libc) and the fact that every subcommand is a one-shot, short-lived
 process; a fuzz target was not written (remaining work).
 
 ## Attack surface of a full systemd

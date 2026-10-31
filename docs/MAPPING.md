@@ -4,7 +4,7 @@ Reference: NVIDIA/NVRC at commit `b9700f3` (v0.1.7, `src/*.rs`, 5,392 lines incl
 function, every forked process and every behaviour of `main()` is listed here with what replaced it:
 
 * **unit**: a systemd unit (file in `overlay/etc/systemd/system/`),
-* **helper**: a subcommand of the static `nvsd-helper` (`helper/nvsd-helper.c`, one libc-free C file, about 1000
+* **helper**: a subcommand of the static `nvsd-helper` (`helper/nvsd-helper.c`, one libc-free C file, about 800
   lines including comments), allowed only where systemd cannot do the job (reason given for each),
 * **dropped**: intentionally not reproduced (reason given).
 
@@ -102,9 +102,11 @@ NVRC baseline and, where marked, only against nvsystemd. All of it runs on a SIM
 
 1. **Parallelism.** NVRC runs everything serially. nvsystemd keeps (a) driver modules before anything that needs the
    driver, (b) module loads one after the other, (c) `nvidia-persistenced` ready (marker seen) before `nvidia-smi` and
-   CDI generation, (d) `srs` after every other configuration step, (e) lockdown after every unit of every mode,
+   CDI generation, (d) `srs` after the other three `nvidia-smi` calls, (e) lockdown after every unit of every mode,
    (f) kata-agent last. It runs `-lmc`, `-lgc`, `-pl`, `nv-hostengine`/`dcgm-exporter` and `nvidia-ctk cdi generate`
-   concurrently. Concurrent `nvidia-smi` invocations are normally safe (NVML serialises in the driver) but this was
+   concurrently, and (a deliberate loosening) `srs` no longer waits for hostengine, the exporter and CDI generation, which
+   only observe the GPU (kata-agent, the first consumer, still starts after all of them; label `final-srs` vs `final` in
+   `docs/BENCHMARK.md` shows what this one edge is worth). Concurrent `nvidia-smi` invocations are normally safe (NVML serialises in the driver) but this was
    **not verified on real hardware** (no GPU here); an operator who wants NVRC's order can add
    `After=nvidia-smi-lmc.service` / `After=nvidia-smi-lgc.service` drop-ins.
 2. **Failure detection is stronger and earlier.** NVRC checks daemon exit status only at a few points
