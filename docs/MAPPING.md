@@ -98,6 +98,32 @@ NVRC baseline and, where marked, only against nvsystemd. All of it runs on a SIM
                                               nvidia-smi-srs  (last, like NVRC)
 ```
 
+## Two systemd bases: Fedora 259 and CentOS Stream 10's 257
+
+`scripts/mkimage.py --base fedora|centos10` builds the same image (same overlay, same helper, same fixture, same
+kernel command line) on either systemd:
+
+| | `fedora` (default, benchmark column "nvsd") | `centos10` (column "nvsd-centos10") |
+|---|---|---|
+| systemd | Fedora `259.10-1.fc44`, from the build host | CentOS Stream 10 `257-35.el10`, from the sysroot made by `scripts/fetch-centos10-systemd.sh` (podman, `quay.io/centos/centos:stream10`, `dnf install systemd`) |
+| libraries | the host's, found with `ldd` (glibc 2.43-9.fc44) | the container's own, found with its `ldd` (glibc 2.39 el10), including its `ld-linux-x86-64.so.2`; no file is shared between the two bases |
+| unit files | `overlay/` | `overlay/`, identical; `overlay-centos10/` (files there would take precedence) **does not exist: no unit needed a change** |
+
+How that was checked, not assumed: the same two boots (cpu mode, and gpu mode with all `nvidia-smi` parameters and dcgm)
+were run on both bases with `systemd.log_level=debug systemd.log_target=console` and the warning/error lines were
+compared. Neither base prints any unknown-section, unknown-key, deprecation or parse message for any of the units. The
+only differences in the logs are Fedora's `Failed to determine whether '/run/credentials/...' is the root file system`
+(259 only, harmless: credentials directories are not used) and CentOS's `Failed to open libbpf, cgroup BPF features
+disabled: Operation not supported` (257 dlopen()s libbpf, which is absent from the image; same outcome as Fedora's, where
+BPF features are simply not used). Every directive the units use exists in 257: `Type=exec`/`forking`, `OnFailure=`,
+`OnSuccess=`, `ConditionPathExists=`, `ConditionPathExistsGlob=`, `ConditionKernelCommandLine=`, `EnvironmentFile=`,
+`StandardOutput=file:`, `Slice=`, `LimitNOFILE=`, `OOMScoreAdjust=`, templates, `%i`, sockets with `Accept=no`.
+
+The full boot-test suite (32 tests, `tests/nvsd-enabled.txt`) passes on both: `scripts/boot-test.sh` and
+`scripts/boot-test.sh --variant nvsd-centos10`. No test is skipped or excluded for CentOS 10. Behaviour that differs by
+base: none observed in any test. Not covered by any test: anything that depends on systemd 259-only behaviour in
+paths that the tests do not reach (for example a future unit using a directive added after 257).
+
 ## Honest semantic differences
 
 1. **Parallelism.** NVRC runs everything serially. nvsystemd keeps (a) driver modules before anything that needs the
