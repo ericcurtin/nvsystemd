@@ -196,13 +196,15 @@ def tables(label, base_label):
     if base_label:
         brows = load(base_label)
         md.append("\n#### Effect of the tuning (nvsystemd before tuning = label %s, same harness, run separately)\n" % base_label)
-        md.append("| scenario | init to kata-agent before | after (Fedora) | after (CentOS 10) | time to kata-agent before | after (Fedora) | after (CentOS 10) |")
-        md.append("|---|---|---|---|---|---|---|")
+        md.append("Medians in ms. The NVRC columns are the same unmodified NVRC image in each of the two runs: they show how far the host or the kernel moved between the runs (it should be about zero).\n")
+        md.append("| scenario | init to kata-agent before | after (Fedora) | after (CentOS 10) | time to kata-agent before | after (Fedora) | after (CentOS 10) | NVRC time to kata-agent in the baseline run | in this run |")
+        md.append("|---|---|---|---|---|---|---|---|---|")
         for sc in scs:
             b0, b1, b2 = (col(brows, sc, "nvsd", "user_us", 1e-3), col(rows, sc, "nvsd", "user_us", 1e-3), col(rows, sc, "nvsd-centos10", "user_us", 1e-3))
             k0, k1, k2 = (col(brows, sc, "nvsd", "kata_start_us", 1e-3), col(rows, sc, "nvsd", "kata_start_us", 1e-3), col(rows, sc, "nvsd-centos10", "kata_start_us", 1e-3))
+            n0, n1 = col(brows, sc, "nvrc", "kata_start_us", 1e-3), col(rows, sc, "nvrc", "kata_start_us", 1e-3)
             if b0 and b1:
-                md.append("| %s | %s | %s | %s | %s | %s | %s |" % (names[sc], fmt(b0), fmt(b1), fmt(b2), fmt(k0), fmt(k1), fmt(k2)))
+                md.append("| %s | %s | %s | %s | %s | %s | %s | %s | %s |" % (names[sc], fmt(b0), fmt(b1), fmt(b2), fmt(k0), fmt(k1), fmt(k2), fmt(n0), fmt(n1)))
     return "\n".join(md) + "\n"
 
 
