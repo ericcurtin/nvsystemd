@@ -60,13 +60,16 @@ nvsystemd on CentOS Stream 10's systemd).
 
 ## Results
 
-<!-- TABLES:final -->
-<!-- /TABLES:final -->
+<!-- TABLES:final3 -->
+<!-- /TABLES:final3 -->
 
-Raw per-run data: `/home/ecurtin/nvsd-work/bench/raw/final.jsonl` (and `baseline2.jsonl` for the untuned nvsystemd; the older
-`baseline.jsonl` is the first untuned run, made before a stub bug was fixed that mounted over NVRC's `/proc`, `/sys`
-and `/run` in the end-marker process; it is kept for transparency). Summaries: `bench/results/final.csv`,
-`bench/results/final.md`, `bench/results/baseline*.csv`. Tuning experiments: `bench/results/tuning.md`.
+Raw per-run data (not committed, kept in the scratch directory): `/home/ecurtin/nvsd-work/bench/raw/final3.jsonl` (the three-column
+final run), `final3.discarded.jsonl` (rounds thrown away by the noise gate, with their host load), `baseline2.jsonl` (nvsystemd before
+tuning, nvrc and Fedora columns only, rerun with the same harness). Older data, kept for transparency and **not** used in the tables:
+`earlier-2col-final-loadedhost.jsonl` (an earlier two-column attempt taken while the host load average was above 40: not valid for
+comparison), `baseline.jsonl` (the first untuned run, made before a stub bug was fixed that mounted over NVRC's `/proc`, `/sys` and
+`/run` in the end-marker process). Committed summaries: `bench/results/final3.csv`, `bench/results/final3.md`,
+`bench/results/baseline2.csv`, and the older `bench/results/baseline*.csv`. Tuning experiments: `bench/results/tuning.md`.
 
 ## What was tuned, and what did not help
 
