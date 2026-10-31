@@ -71,7 +71,7 @@ The kernel is the host's `/lib/modules/7.2.13-200.fc44.x86_64/vmlinuz`, used dir
 scripts/boot-test.sh                    # nvsystemd, the tests enabled in tests/nvsd-enabled.txt
 scripts/boot-test.sh --all              # every test against nvsystemd
 scripts/boot-test.sh --variant nvrc     # the same expectations against the NVRC baseline
-scripts/boot-test.sh --variant nvsd-centos10   # nvsystemd on CentOS Stream 10's systemd (all 32 tests pass)
+scripts/boot-test.sh --variant nvsd-centos10   # nvsystemd on CentOS Stream 10's systemd (all 33 tests pass; the same 33 pass on the Fedora base)
 scripts/boot-test.sh -k t13 -v          # one test
 ```
 
@@ -89,6 +89,11 @@ NVSD_CPUS=12-15 python3 bench/run.py --scenarios S0,S1,S2,S3,S4 --runs 30 --labe
 python3 bench/summarize.py mytest --csv bench/results/mytest.csv --md bench/results/mytest.md
 python3 bench/report.py mytest --update docs/BENCHMARK.md   # the markdown tables of docs/BENCHMARK.md (needs <!-- TABLES:mytest --> markers)
 ```
+
+The driver aborts (exit 3) after a round if it holds more than 64 open file descriptors or the system `Shmem` exceeds 4 GiB
+(`--max-fds`, `--max-shmem-gb`); boot test `t40` asserts that repeated GPU boots in one process leave no memfd behind. Both exist
+because the fake PCI server once leaked every guest's RAM memfd into the benchmark process (see `docs/BENCHMARK.md`, threats to
+validity); data collected before the fix (`bench/results/README.md`) is labelled suspect.
 
 See `docs/BENCHMARK.md` for the methodology, the numbers and the verdict.
 

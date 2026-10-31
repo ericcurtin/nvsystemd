@@ -20,7 +20,7 @@ NVRC baseline and, where marked, only against nvsystemd. All of it runs on a SIM
 | `lockdown::set_panic_hook()` (kmsg line, `sync()`, power off on any panic) | `nvsd-poweroff.service` + helper `poweroff`; every unit has `OnFailure=nvsd-poweroff.service` | t30-t36, u10 |
 | `NVRC::default()` | none (state is the files under `/run/nvsd`) | |
 | `mount::setup()`: /proc /sys /run (nosuid,noexec,nodev,relatime; run mode=0755) | systemd's built-in early API mounts (no unit) | t01 |
-| `mount::setup()`: /tmp tmpfs (nosuid,nodev,relatime) | `nvsd-init.service`, helper `init` (`mount(2)`). The first implementation was the native `tmp.mount`; each mount unit forks `systemd-executor` and `/usr/bin/mount`, measured at 4.8 ms for the two mount units on the zero-latency gpu scenario (`bench/results/tuning.md`), so they were folded into the init helper (git history has the units) | t01 |
+| `mount::setup()`: /tmp tmpfs (nosuid,nodev,relatime) | `nvsd-init.service`, helper `init` (`mount(2)`). The first implementation was the native `tmp.mount`; each mount unit forks `systemd-executor` and `/usr/bin/mount`, measured at 4.8 ms for the two mount units on the zero-latency gpu scenario (`bench/results/tuning.md`, measured under the benchmark fd leak, so indicative only; the clean before/after of the whole tuning is in `docs/BENCHMARK.md`), so they were folded into the init helper (git history has the units) | t01 |
 | `mount::setup()`: securityfs on /sys/kernel/security (optional) | systemd's built-in table (`/sys/kernel/security` is mounted when the kernel has it) | |
 | `mount::setup()`: configfs on /sys/kernel/config (optional: only if the kernel has it and the target exists) | `nvsd-init.service`, helper `init` (same reason as /tmp) | t01 |
 | `net::loopback_up()` | systemd brings `lo` up itself at startup (checked: `lo_flags` has IFF_UP) | t01 |
@@ -119,7 +119,7 @@ BPF features are simply not used). Every directive the units use exists in 257: 
 `OnSuccess=`, `ConditionPathExists=`, `ConditionPathExistsGlob=`, `ConditionKernelCommandLine=`, `EnvironmentFile=`,
 `StandardOutput=file:`, `Slice=`, `LimitNOFILE=`, `OOMScoreAdjust=`, templates, `%i`, sockets with `Accept=no`.
 
-The full boot-test suite (32 tests, `tests/nvsd-enabled.txt`) passes on both: `scripts/boot-test.sh` and
+The full boot-test suite (33 tests, incl. the fd-leak regression test t40, `tests/nvsd-enabled.txt`) passes on both: `scripts/boot-test.sh` and
 `scripts/boot-test.sh --variant nvsd-centos10`. No test is skipped or excluded for CentOS 10. Behaviour that differs by
 base: none observed in any test. Not covered by any test: anything that depends on systemd 259-only behaviour in
 paths that the tests do not reach (for example a future unit using a directive added after 257).
