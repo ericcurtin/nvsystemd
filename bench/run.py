@@ -127,6 +127,34 @@ def host_state():
             "mem_avail_mb": mi["MemAvailable"] // 1024, "swap_used_mb": (mi["SwapTotal"] - mi["SwapFree"]) // 1024}
 
 
+def mem_pressure():
+    """Host-wide memory stall counters, sampled around every QEMU run. A guest that has to fault in 512 MB while the
+    host is short of free memory (direct reclaim, swap) stalls inside the kernel boot for 0.5-4 s whatever the init is."""
+    out = {"psi_some_us": 0, "psi_full_us": 0}
+    try:
+        with open("/proc/pressure/memory") as f:
+            for ln in f:
+                kind, *rest = ln.split()
+                out["psi_%s_us" % kind] = int(dict(x.split("=") for x in rest)["total"])
+    except OSError:
+        pass
+    with open("/proc/vmstat") as f:
+        for ln in f:
+            k, v = ln.split()
+            if k.startswith("allocstall"):
+                out["allocstall"] = out.get("allocstall", 0) + int(v)
+            elif k in ("pswpin", "pswpout", "pgscan_direct"):
+                out[k] = int(v)
+    return out
+
+
+def mem_pressure_delta(a, b):
+    d = {k: b[k] - a[k] for k in a if k in b}
+    return {"mem_stall_ms": round(d["psi_some_us"] / 1000.0, 1), "mem_stall_full_ms": round(d["psi_full_us"] / 1000.0, 1),
+            "swap_pages": d.get("pswpin", 0) + d.get("pswpout", 0), "direct_reclaim_pages": d.get("pgscan_direct", 0),
+            "allocstalls": d.get("allocstall", 0)}
+
+
 def metrics(rep, image_bytes):
     """One run's numbers. Memory/CPU come from the stub's report at the moment kata-agent starts."""
     k = rep.kata
@@ -179,6 +207,7 @@ def main():
     ap.add_argument("--busy-limit", type=float, default=2.5, help="other host load (busy CPUs: sampled before a round, and over the round on the CPUs QEMU is not pinned to) above this discards the round")
     ap.add_argument("--pinned-limit", type=float, default=0.5, help="busy fraction of the pinned cores (sum) above this before a round discards it")
     ap.add_argument("--cpus", default=os.environ.get("NVSD_CPUS", ""), help="pin every QEMU to these host CPUs (taskset), e.g. 12-15")
+    ap.add_argument("--mem-stall-limit", type=float, default=0.0, help="host memory pressure (PSI 'some' stall, ms, during any one QEMU run of the round) above this discards the round; 0 = record only")
     ap.add_argument("--max-attempts", type=int, default=8, help="attempts per round before the round is kept flagged noisy")
     a = ap.parse_args()
     # "name" or "alias=spec" (spec like nvsd@/dir for an experimental overlay directory, or nvsd-probe)
@@ -233,11 +262,14 @@ def main():
                 snap0 = stat_snapshot()
                 recs = []
                 for v in order:
+                    mp0 = mem_pressure()
                     rep = L.boot(specs[v], pci=sc["pci"], append=(sc["append"] + " " + a.append + " " + cmdlines[v]).strip(), image=images[v], timeout=60)
+                    mpd = mem_pressure_delta(mp0, mem_pressure())
                     m = metrics(rep, sizes[v])
                     rec = {"label": a.label, "scenario": name, "variant": v, "round": r, "ok": m is not None,
                            "ts": time.time(), "host_busy_cpus": round(busy0, 2), "pinned_busy": round(pb0, 3),
                            "attempt": attempt, "order": order, "host_before": st0}
+                    rec.update(mpd)
                     if m:
                         rec.update(m)
                     else:
@@ -245,7 +277,9 @@ def main():
                     recs.append(rec)
                 busy1 = others_busy(snap0, stat_snapshot(), pinned)  # over the whole round, outside the QEMU cores
                 st1 = host_state()
-                quiet = busy0 <= a.busy_limit and busy1 <= a.busy_limit and pb0 <= a.pinned_limit
+                stall = max(rec["mem_stall_ms"] for rec in recs)
+                quiet = busy0 <= a.busy_limit and busy1 <= a.busy_limit and pb0 <= a.pinned_limit and (
+                    a.mem_stall_limit <= 0 or stall <= a.mem_stall_limit)
                 for rec in recs:
                     rec["host_busy_cpus_during"] = round(busy1, 2)
                     rec["host_after"] = st1
@@ -260,8 +294,8 @@ def main():
                 with open(discarded, "a") as f:
                     for rec in recs:
                         f.write(json.dumps(rec) + "\n")
-                print("   %s round %d attempt %d discarded (busy before %.1f during %.1f pinned %.2f, load1 %.1f)" % (
-                    name, r, attempt, busy0, busy1, pb0, st1["load1"]), flush=True)
+                print("   %s round %d attempt %d discarded (busy before %.1f during %.1f pinned %.2f, load1 %.1f, mem stall %.0f ms)" % (
+                    name, r, attempt, busy0, busy1, pb0, st1["load1"], stall), flush=True)
                 time.sleep(5)
             if r >= 0 and (r + 1) % 10 == 0:
                 print("   %s round %d/%d  load1=%.1f" % (name, r + 1, a.runs, os.getloadavg()[0]), flush=True)
