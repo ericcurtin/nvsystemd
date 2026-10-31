@@ -1,7 +1,7 @@
 # nvsystemd design notes: security mapping and attack surface
 
-nvsystemd replaces NVRC's hand-written PID 1 with Fedora's stock `/usr/lib/systemd/systemd` (259.10-1.fc44, unmodified)
-plus static unit files and a small helper. This file says how NVRC's security-relevant behaviours are
+nvsystemd replaces NVRC's hand-written PID 1 with a stock systemd (Fedora's `/usr/lib/systemd/systemd` 259.10-1.fc44, or
+CentOS Stream 10's 257-35.el10, both unmodified; the same units run on either) plus static unit files and a small helper. This file says how NVRC's security-relevant behaviours are
 carried over, what is weaker, and what is larger. Nothing here was tested on a confidential VM; it is a design
 argument backed by the simulated boot tests listed in `docs/MAPPING.md`.
 
@@ -43,7 +43,7 @@ Measured from the image built by `scripts/mkimage.py` (`bench/results/*` has the
 
 | | NVRC | nvsystemd |
 |---|---|---|
-| PID 1 code | one static musl binary, 0.58 MB, about 5,400 lines of Rust (incl. tests), crates: nix, libc, log, kernlog, sha2, rlimit, once_cell | `systemd` (148 KB) + `systemd-executor` (1.5 MB) + `libsystemd-core` (2.7 MB) + `libsystemd-shared` (5.7 MB) + libcrypto 5.7 MB, libc, libm, libmount, libblkid, libselinux, libpcre2, libcrypt, libz, libgcc_s (22.7 MB uncompressed in total) |
+| PID 1 code | one static musl binary, 0.58 MB, about 5,400 lines of Rust (incl. tests), crates: nix, libc, log, kernlog, sha2, rlimit, once_cell | Fedora base: `systemd` (148 KB) + `systemd-executor` (1.5 MB) + `libsystemd-core` (2.7 MB) + `libsystemd-shared` (5.7 MB) + libcrypto 5.8 MB, libc, libm, libmount, libblkid, libselinux, libpcre2, libcrypt, libz, libgcc_s (13 library files, 21.0 MB uncompressed, 22.6 MB with the two binaries). CentOS 10 base: `systemd` (148 KB) + `systemd-executor` (1.4 MB) + `libsystemd-core` (2.6 MB) + `libsystemd-shared` (4.9 MB) + libcrypto 5.6 MB and 17 more libraries (20 library files in total); el10's systemd links libpam, libaudit, libacl, libcap, libcap-ng, libseccomp and libeconf at build time (Fedora 259 `dlopen()`s them, so they are not in the Fedora image), 19.8 MB of libraries and 21.3 MB with the two binaries |
 | Dynamic loading | none | ld.so; systemd `dlopen()`s libmount (included) and others on demand (not present in the image: the call fails, systemd continues) |
 | IPC endpoints | none | `/run/systemd/private` (root only), notify socket (`/run/systemd/notify`), the control socket; there is no D-Bus daemon, no `systemctl` binary, no journald, no udev, no logind in the image |
 | Parsing of external input | `/proc/cmdline` | `/proc/cmdline` (systemd looks at `systemd.*` and `rd.*` items, and `ConditionKernelCommandLine`), unit files (static), plus everything above |

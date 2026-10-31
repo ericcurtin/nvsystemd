@@ -8,30 +8,37 @@ system smaller.
 
 ## What was compared
 
-| | NVRC | nvsystemd |
-|---|---|---|
-| PID 1 | NVRC `b9700f3` (v0.1.7), unmodified, NVRC's own `[profile.release]`, `x86_64-unknown-linux-musl`, static, built by `scripts/build-nvrc.sh` | Fedora `systemd` 259.10-1.fc44, unmodified, plus its `ldd` libraries copied from the host |
-| rest of the image | identical fixture files, stub binaries (byte for byte the same file, hard-linked under the tool names), `kata-agent` stub | same, plus `overlay/` (units) and `nvsd-helper` |
-| machine | the same kernel (`/lib/modules/7.2.13-200.fc44.x86_64/vmlinuz`, `-kernel`), QEMU/KVM q35, `-cpu host`, 2 vCPU, 512 MB, serial console, `-no-reboot` | same |
-| kernel command line | `console=ttyS0 quiet panic=-1 8250.nr_uarts=1 random.trust_cpu=on TERM=dumb tsc=reliable no_timer_check log_buf_len=1M` plus the scenario's `nvrc.*` items | same, byte for byte |
-| initramfs | cpio (newc), zstd -19 | same codec |
-| simulated PCI | `fixture/fakepci/fakepci.py` over vfio-user: 1 GPU `10de:2330` class 0302 (S1-S3), 4 NVSwitch `10de:22a3` class 0680 (S4) | same |
+Three columns, in every table: **nvrc** | **nvsd** (nvsystemd on Fedora's systemd) | **nvsd-centos10** (the same
+nvsystemd on CentOS Stream 10's systemd).
+
+| | NVRC | nvsystemd, Fedora base ("nvsd") | nvsystemd, CentOS 10 base ("nvsd-centos10") |
+|---|---|---|---|
+| PID 1 | NVRC `b9700f3` (v0.1.7), unmodified, NVRC's own `[profile.release]`, `x86_64-unknown-linux-musl`, static, built by `scripts/build-nvrc.sh` | Fedora `systemd` 259.10-1.fc44, unmodified, plus its `ldd` libraries (glibc 2.43-9.fc44) copied from the host | CentOS Stream 10 `systemd` 257-35.el10, unmodified, with its own glibc 2.39 and libraries from `scripts/fetch-centos10-systemd.sh` (no file shared with the Fedora base) |
+| rest of the image | identical fixture files, stub binaries (byte for byte the same file, hard-linked under the tool names), `kata-agent` stub | same, plus `overlay/` (units) and `nvsd-helper` | same overlay and helper, byte for byte (no `overlay-centos10/` was needed) |
+| machine | the same kernel (`/lib/modules/7.2.13-200.fc44.x86_64/vmlinuz`, `-kernel`), QEMU/KVM q35, `-cpu host`, 2 vCPU, 512 MB, serial console, `-no-reboot`; QEMU pinned with `taskset -c 12-15` | same | same |
+| kernel command line | `console=ttyS0 quiet panic=-1 8250.nr_uarts=1 random.trust_cpu=on TERM=dumb tsc=reliable no_timer_check log_buf_len=1M` plus the scenario's `nvrc.*` items | same, byte for byte | same, byte for byte |
+| initramfs | cpio (newc), zstd -19 | same codec | same codec |
+| simulated PCI | `fixture/fakepci/fakepci.py` over vfio-user: 1 GPU `10de:2330` class 0302 (S1-S3), 4 NVSwitch `10de:22a3` class 0680 (S4) | same | same |
 
 ## Method
 
-* `bench/run.py`: for every scenario it builds both images, runs 2 warm-up rounds, then **30 measured rounds per scenario**. In
-  every round both variants boot once, **interleaved**, and the order alternates between rounds (A B, B A, ...) so that drift
-  and bursts of load from other jobs on this shared host hit both. Each QEMU run is wrapped in `timeout -s KILL 60`. Before each
-  round the driver waits (at most 90 s) until other host load is below 2.5 CPUs; the measured value is stored with every run
-  (`host_busy_cpus`, `loadavg1`).
-* The end marker is the `kata-agent` stub. It is the same file for both inits. It records `CLOCK_BOOTTIME` the instant it starts, then
+* `bench/run.py`: for every scenario it builds the three images, runs 2 warm-up rounds, then **30 measured rounds per scenario**. In
+  every round all three variants boot once, **interleaved**, in a different permutation each round (all 6 orders in turn) so that
+  position effects and drift hit every column equally. Each QEMU run is wrapped in `timeout -s KILL 60` and **pinned with `taskset -c 12-15`**
+  (two physical cores) so the guest never competes with the benchmark driver or with other jobs for its cores.
+* **Host noise gate.** The host is shared (another agent session, `updatedb`, a busy `kswapd0`; load average reached about 46 during an
+  earlier, discarded attempt). A round is accepted only if (a) before it the other host load is at most 1.0 busy CPUs and the four pinned
+  cores are at most 0.3 busy, and (b) averaged over the round, the CPUs QEMU is not pinned to are at most 1.0 busy. Otherwise the whole round is
+  discarded (kept in `<label>.discarded.jsonl`) and redone, up to 8 attempts, after which it is kept and flagged `noisy`. Every record stores load
+  average, free/available memory, swap, and the busy figures. The summary line under the tables counts discarded and noisy rounds.
+* The end marker is the `kata-agent` stub. It is the same file for every init. It records `CLOCK_BOOTTIME` the instant it starts, then
   prints a report (memory, process census, per-process RSS/PSS, PID 1 CPU time, mounts, the stub event log) on the serial console
-  and powers the VM off. A run without a complete report is counted as failed and excluded (none occurred unless the table says so).
+  and powers the VM off. A run without a complete report is counted as failed and excluded.
 * **Definition of "time to kata-agent start"**: `CLOCK_BOOTTIME` in the kata-agent stub at its first instruction. It includes
   kernel boot and initramfs unpack. It is reported together with its two parts: *kernel time* = the kernel's own timestamp of
   `Run /init as init process`, and *init to kata-agent* = the difference (userspace). QEMU start-up time on the host is not included.
-* Statistics per cell: median, p95 (nearest rank), min, max, sample standard deviation. The *paired diff* is the median over rounds of
-  (nvsystemd - NVRC) in the same round.
+* Statistics per cell: median, p95 (nearest rank), min-max, sample standard deviation. A *paired diff* is the median over rounds of the
+  difference of two columns measured in the same round.
 * Memory is `MemTotal - MemAvailable` at kata-agent start (the unpacked initramfs counts: it lives in RAM). Init RSS/PSS comes from
   `/proc/<pid>/smaps_rollup`. NVRC execs kata-agent into PID 1, so NVRC's own process is the syslog-poller child it forks just before
   the exec (same address space snapshot): that is the NVRC figure.

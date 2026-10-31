@@ -1,8 +1,10 @@
 # nvsystemd
 
 **What this is.** A version of [NVIDIA/NVRC](https://github.com/NVIDIA/nvrc) (a ~5k-line Rust PID 1 for ephemeral
-NVIDIA GPU micro VMs under Kata Containers) that uses **Fedora's unmodified systemd** (`/usr/lib/systemd/systemd`,
-259.10-1.fc44, plus the shared libraries `ldd` reports, copied from the build host) as PID 1. NVRC's job is expressed
+NVIDIA GPU micro VMs under Kata Containers) that uses an **unmodified stock systemd** as PID 1, on either of two bases:
+**Fedora's** (`/usr/lib/systemd/systemd`, 259.10-1.fc44, plus the shared libraries `ldd` reports, copied from the build
+host) or **CentOS Stream 10's** (257-35.el10 with its own glibc and libraries, fetched from the CentOS container image
+by `scripts/fetch-centos10-systemd.sh`). The same unit files run on both, no unit needed a change. NVRC's job is expressed
 as unit files: one systemd unit per process NVRC forks or execs (`nvidia-persistenced`, each `nvidia-smi` call,
 `nv-hostengine`, `dcgm-exporter`, `nvidia-ctk cdi generate`, `nv-fabricmanager`, `nvlsm`, one `modprobe@.service`
 instance per module, `kata-agent`), targets for the modes (cpu, gpu, servicevm-nvl4, servicevm-nvl5), ordering and
@@ -22,8 +24,9 @@ and `fixture/fakepci/fakepci.py` presents PCI devices with NVIDIA ids to QEMU ov
 NVRC's and nvsystemd's PCI topology detection runs for real. No claim in this repository is about real GPU initialisation
 time; `docs/BENCHMARK.md` says what the numbers do and do not show.
 
-Licence: Apache-2.0 (`LICENSE`), `NOTICE` credits NVIDIA NVRC. Fedora's systemd (LGPL-2.1-or-later) is **not
-redistributed**: it is copied from the host into images that stay in the (git-ignored) scratch directory.
+Licence: Apache-2.0 (`LICENSE`), `NOTICE` credits NVIDIA NVRC. Fedora's and CentOS's systemd (LGPL-2.1-or-later) are
+**not redistributed**: they are copied from the host, respectively from a podman container, into images and a sysroot
+that stay in the (git-ignored) scratch directory.
 
 ## Layout
 
@@ -34,8 +37,10 @@ helper/nvsd-helper.c          the static helper (libc-free C)
 common/mini.h                 syscall layer shared by helper and fixture
 fixture/stub/nvstub.c         simulated NVIDIA userspace + kata-agent stub (end marker, records timing and memory)
 fixture/fakepci/fakepci.py    vfio-user server that fakes PCI devices (GPU, NVSwitch, CX7 with SW_MNG VPD)
-scripts/                      image builder (no root needed), QEMU runner, boot tests, NVRC build
-bench/                        run.py (interleaved A/B), summarize.py, results/ (small CSV/markdown)
+scripts/                      image builder (no root needed, --base fedora|centos10), QEMU runner, boot tests, NVRC build,
+                              fetch-centos10-systemd.sh (CentOS Stream 10 systemd sysroot via podman)
+bench/                        run.py (interleaved NVRC / nvsd-Fedora / nvsd-CentOS10), summarize.py, compare.py, report.py,
+                              results/ (small CSV/markdown)
 docs/                         MAPPING.md, BENCHMARK.md, DESIGN.md
 tests/nvsd-enabled.txt        which tests nvsystemd must pass (grew one unit at a time)
 ```
@@ -53,6 +58,8 @@ rustup toolchain install 1.94.0 && rustup target add x86_64-unknown-linux-musl  
 scripts/build-nvrc.sh      # static musl release build with NVRC's own [profile.release]; no musl-gcc needed,
                            # the linker is overridden with an environment variable, NVRC's files are untouched
 make stub helper           # fixture and helper (plain gcc, freestanding)
+scripts/fetch-centos10-systemd.sh   # optional: CentOS Stream 10 systemd 257 sysroot (needs podman and the container's network
+                                    # access for `dnf install systemd`); lands in /home/ecurtin/nvsd-work/centos10, git-ignored
 ```
 
 Images are built on demand by the tests and the benchmark (`scripts/mkimage.py`, pure Python cpio writer, no root).
@@ -64,6 +71,7 @@ The kernel is the host's `/lib/modules/7.2.13-200.fc44.x86_64/vmlinuz`, used dir
 scripts/boot-test.sh                    # nvsystemd, the tests enabled in tests/nvsd-enabled.txt
 scripts/boot-test.sh --all              # every test against nvsystemd
 scripts/boot-test.sh --variant nvrc     # the same expectations against the NVRC baseline
+scripts/boot-test.sh --variant nvsd-centos10   # nvsystemd on CentOS Stream 10's systemd (all 32 tests pass)
 scripts/boot-test.sh -k t13 -v          # one test
 ```
 
@@ -75,8 +83,11 @@ daemon, persistenced), invalid parameters, bad topology, extension fail-closed p
 ## Run the benchmark
 
 ```sh
-python3 bench/run.py --scenarios S0,S1,S2,S3,S4 --runs 30 --label mytest     # raw JSON lines in /home/ecurtin/nvsd-work/bench/raw/
+# three columns by default: nvrc, nvsd (Fedora systemd), nvsd-centos10; QEMU pinned to host CPUs 12-15, rounds taken while
+# other host load is high are discarded and redone; resumable (rerun the same command after an interruption)
+NVSD_CPUS=12-15 python3 bench/run.py --scenarios S0,S1,S2,S3,S4 --runs 30 --label mytest   # raw JSON lines in /home/ecurtin/nvsd-work/bench/raw/
 python3 bench/summarize.py mytest --csv bench/results/mytest.csv --md bench/results/mytest.md
+python3 bench/report.py mytest --update docs/BENCHMARK.md   # the markdown tables of docs/BENCHMARK.md (needs <!-- TABLES:mytest --> markers)
 ```
 
 See `docs/BENCHMARK.md` for the methodology, the numbers and the verdict.
@@ -104,4 +115,5 @@ Duplicated keys: the last occurrence wins. Unknown `nvrc.*` items are ignored.
 * The dm-verity/erofs extension mount cannot run in the test VM; only its planning and failure paths are tested.
 * The helper is C, not Rust, and runs as root (see `docs/DESIGN.md`).
 * systemd is a far larger attack surface than NVRC (see `docs/DESIGN.md`).
-* Fedora's systemd binary and libraries come from the build host and are not part of this repository.
+* Fedora's systemd binary and libraries come from the build host and CentOS 10's from a podman container; neither is part of
+  this repository. The two bases differ in systemd version (259 vs 257), glibc (2.43 vs 2.39) and distribution build flags.
