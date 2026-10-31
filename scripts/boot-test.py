@@ -491,6 +491,21 @@ def t36_uvm_tools_without_uvm_major_fails_closed(variant, v):
     vm_off_without_agent(rep)
 
 
+@test
+def t40_gpu_boots_leave_no_memfd_or_fd_in_the_driver(variant, v):
+    """Regression: fakepci once kept the SCM_RIGHTS fd of every vfio-user DMA_MAP (a dup of the guest RAM memfd), so
+    each GPU guest leaked 512 MiB of host shared memory into the driver process (tens of GiB over a benchmark).
+    Boot GPU and NVSwitch guests several times in this one process and assert that nothing accumulates."""
+    import vmrun
+    img = L.build_image(variant, "", "fdleak", "zstd3")
+    base = vmrun.open_fds()
+    for i in range(4):
+        rep = L.boot(variant, pci=["gpu1" if i % 2 == 0 else "nvl4"], append=ECHO, image=img, timeout=30)
+        booted_agent(rep)
+        now = vmrun.open_fds()
+        leaked = {fd: t for fd, t in now.items() if fd not in base}
+        assert not any(t.startswith("/memfd:") for t in now.values()), "memfd leaked after boot %d: %s" % (i, leaked)
+        assert len(now) <= len(base) + 1, "fds accumulate after boot %d: %s" % (i, leaked)
 
 
 def main():

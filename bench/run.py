@@ -6,7 +6,8 @@
 
 Variants: nvrc, nvsd (nvsystemd on Fedora's systemd), nvsd-centos10 (same overlay on CentOS Stream 10's systemd);
 "<v>-probe" are the calibration images. All variants boot once per round, in a permuted order (interleaved).
-Resumable: rounds already present in the raw file are skipped. Rounds taken while other host load was above
+After every round the driver aborts (exit 3, round not written) if it holds more than --max-fds (64) open fds or the
+system Shmem is above --max-shmem-gb (4 GiB). Resumable: rounds already present in the raw file are skipped. Rounds taken while other host load was above
 --busy-limit (before or after the round) are discarded into <label>.discarded.jsonl and redone.
 
 Everything is SIMULATED hardware (fixture/): no GPU exists on this host. Per run it boots one image in
@@ -155,6 +156,37 @@ def mem_pressure_delta(a, b):
             "allocstalls": d.get("allocstall", 0)}
 
 
+class HostGuardError(RuntimeError):
+    pass
+
+
+def shmem_kb():
+    with open("/proc/meminfo") as f:
+        for ln in f:
+            if ln.startswith("Shmem:"):
+                return int(ln.split()[1])
+    return 0
+
+
+def host_guard(max_fds, max_shmem_gb, where=""):
+    """Abort the benchmark if this process holds too many fds or the host's shared memory is high. A leaked guest RAM
+    memfd (512 MiB each) once piled up to ~20 GB over a run and silently distorted the late rounds, so the numbers of
+    such a run cannot be trusted: stop instead of carrying on."""
+    fds = vmrun.open_fds()
+    sh = shmem_kb()
+    if len(fds) > max_fds:
+        kinds = {}
+        for t in fds.values():
+            k = "memfd" if t.startswith("/memfd:") else t.split(":")[0] if ":" in t else t
+            kinds[k] = kinds.get(k, 0) + 1
+        raise HostGuardError("%s: the benchmark driver has %d open fds (limit %d): %s. Something leaks file descriptors "
+                             "(guest memfds keep host memory alive); results from here on would be distorted." % (
+                                 where, len(fds), max_fds, dict(sorted(kinds.items(), key=lambda kv: -kv[1])[:5])))
+    if sh > max_shmem_gb * 1024 * 1024:
+        raise HostGuardError("%s: system Shmem is %.2f GiB (limit %.1f GiB): guest memory is not being released." % (
+            where, sh / 1024.0 / 1024.0, max_shmem_gb))
+
+
 def metrics(rep, image_bytes):
     """One run's numbers. Memory/CPU come from the stub's report at the moment kata-agent starts."""
     k = rep.kata
@@ -208,6 +240,8 @@ def main():
     ap.add_argument("--pinned-limit", type=float, default=0.5, help="busy fraction of the pinned cores (sum) above this before a round discards it")
     ap.add_argument("--cpus", default=os.environ.get("NVSD_CPUS", ""), help="pin every QEMU to these host CPUs (taskset), e.g. 12-15")
     ap.add_argument("--mem-stall-limit", type=float, default=0.0, help="host memory pressure (PSI 'some' stall, ms, during any one QEMU run of the round) above this discards the round; 0 = record only")
+    ap.add_argument("--max-fds", type=int, default=64, help="abort if the driver process has more open fds than this after a round")
+    ap.add_argument("--max-shmem-gb", type=float, default=4.0, help="abort if system Shmem exceeds this after a round")
     ap.add_argument("--max-attempts", type=int, default=8, help="attempts per round before the round is kept flagged noisy")
     a = ap.parse_args()
     # "name" or "alias=spec" (spec like nvsd@/dir for an experimental overlay directory, or nvsd-probe)
@@ -277,6 +311,11 @@ def main():
                     recs.append(rec)
                 busy1 = others_busy(snap0, stat_snapshot(), pinned)  # over the whole round, outside the QEMU cores
                 st1 = host_state()
+                try:
+                    host_guard(a.max_fds, a.max_shmem_gb, "%s round %d (attempt %d)" % (name, r, attempt))
+                except HostGuardError as e:
+                    print("ABORT: %s" % e, file=sys.stderr, flush=True)
+                    sys.exit(3)  # this round is not written: it ran under the fault
                 stall = max(rec["mem_stall_ms"] for rec in recs)
                 quiet = busy0 <= a.busy_limit and busy1 <= a.busy_limit and pb0 <= a.pinned_limit and (
                     a.mem_stall_limit <= 0 or stall <= a.mem_stall_limit)

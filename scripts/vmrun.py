@@ -38,6 +38,23 @@ PCI_PRESETS = {
 }
 
 
+def open_fds():
+    """File descriptors open in this process, as {fd: link target}. The fake PCI devices live in this process, so
+    anything they fail to close (e.g. the guest RAM memfd that QEMU passes with vfio-user DMA_MAP) accumulates here
+    over a long benchmark: 512 MiB of host shared memory per leaked guest."""
+    out = {}
+    for fd in os.listdir("/proc/self/fd"):
+        try:
+            out[int(fd)] = os.readlink("/proc/self/fd/" + fd)
+        except OSError:  # the fd of the listing itself, closed already
+            pass
+    return out
+
+
+def memfd_count():
+    return sum(1 for t in open_fds().values() if t.startswith("/memfd:"))
+
+
 def qemu_cmd(kernel, initrd, append, pci_args, smp=2, mem=512, qemu="qemu-system-x86_64", extra=()):
     return [
         qemu, "-machine", "q35,accel=kvm,memory-backend=pc.ram", "-cpu", "host",
