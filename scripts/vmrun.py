@@ -55,7 +55,11 @@ def run(kernel, initrd, append, pci=(), timeout=30, smp=2, mem=512, out=None, qe
         specs += PCI_PRESETS[p] if p in PCI_PRESETS else [p]
     sockdir = tempfile.mkdtemp(prefix="nvsd-pci-")
     devs, pci_args = fakepci.start_devices(specs, sockdir)
-    cmd = ["timeout", "-s", "KILL", str(timeout)] + qemu_cmd(kernel, initrd, append, pci_args, smp, mem, extra=qemu_extra)
+    cmd = ["timeout", "-s", "KILL", str(timeout)]
+    cpus = os.environ.get("NVSD_CPUS")  # e.g. "12-15": pin QEMU (all threads) to dedicated host cores (benchmarks)
+    if cpus:
+        cmd += ["taskset", "-c", cpus]
+    cmd += qemu_cmd(kernel, initrd, append, pci_args, smp, mem, extra=qemu_extra)
     t0 = time.monotonic()
     proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     lines = []
