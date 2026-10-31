@@ -61,9 +61,16 @@ def pc(x, nd=1):
 
 def sizes():
     """On-disk sizes of the init and everything it needs, per base (Fedora from the build host, CentOS 10 from the sysroot)."""
+    # the same library set mkimage.add_systemd() puts into the image: systemd, executor, mount and libmount (dlopen) with their ldd closure
     libs = set(mkimage.ldd_libs("/usr/lib/systemd/systemd")) | set(mkimage.ldd_libs("/usr/lib/systemd/systemd-executor"))
+    for b in mkimage.EXTRA_BINS:
+        libs |= set(mkimage.ldd_libs(b))
+    for extra in mkimage.DLOPEN_LIBS:
+        libs.add(extra)
+        libs |= set(mkimage.ldd_libs(extra))
+    libs = {os.path.realpath(x) + "|" + os.path.basename(x) for x in libs}
     fed = {"systemd": os.path.getsize("/usr/lib/systemd/systemd"), "executor": os.path.getsize("/usr/lib/systemd/systemd-executor"),
-           "libs": sum(os.path.getsize(os.path.realpath(x)) for x in libs)}
+           "libs": sum(os.path.getsize(x.split("|")[0]) for x in libs), "nlibs": len(libs)}
     c10 = {}
     if os.path.isdir(CENTOS10):
         c10 = {"systemd": os.path.getsize(os.path.join(CENTOS10, "usr/lib/systemd/systemd")),
@@ -73,7 +80,7 @@ def sizes():
             for f in fn:
                 tot += os.path.getsize(os.path.join(d, f))
         c10["libs"] = tot - c10["systemd"] - c10["executor"] - os.path.getsize(os.path.join(CENTOS10, "usr/bin/mount"))
-        # libs here = every library file in the sysroot (mount binary excluded), comparable to the Fedora ldd set
+        c10["nlibs"] = sum(len(fn) for _d, _dn, fn in os.walk(CENTOS10)) - 3  # the sysroot holds exactly the three binaries and the libraries
     return {"nvrc": os.path.getsize(NVRC_BIN), "fedora": fed, "centos10": c10, "helper": os.path.getsize(os.path.join(OUT, "nvsd-helper"))}
 
 
@@ -160,7 +167,7 @@ def tables(label, base_label):
     cells = {"nvrc": "%.0f" % (sz["nvrc"] / 1024)}
     for b, k in (("fedora", "nvsd"), ("centos10", "nvsd-centos10")):
         if sz[b]:
-            cells[k] = "%.0f (+ helper %.0f, units)" % ((sz[b]["systemd"] + sz[b]["executor"] + sz[b]["libs"]) / 1024, sz["helper"] / 1024)
+            cells[k] = "%.0f in %d libraries (+ mount, helper %.0f, units)" % ((sz[b]["systemd"] + sz[b]["executor"] + sz[b]["libs"]) / 1024, sz[b]["nlibs"], sz["helper"] / 1024)
     md.append("| everything the init needs on disk (binaries + shared libraries), KiB | %s |" % " | ".join(cells.get(k, "-") for k, _ in present))
     cells = {}
     for k, _ in present:
